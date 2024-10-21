@@ -28,10 +28,10 @@ Worker ENV:
 ## Dev Setup
 
 1. `cp .env.example .env` to create the env file
-1. `docker compose up -d` to start the RabbitMQ and PostgresSQL containers
-1. `cargo run --bin scheduler` to start the scheduler
-1. `WORKER_NAME=worker1 WORKER_TOPICS=all,europe,poland cargo run --bin worker` to start first worker
-1. `WORKER_NAME=worker2 WORKER_TOPICS=all,europe,spain cargo run --bin worker` to start second worker
+1. `ln -s "$PWD" /tmp/bms` to create symlink to shared storage between the scheduler and the host
+1. `docker compose up -d rabbitmq` to start the RabbitMQ (needs to be started before the application)
+1. `docker compose up -d` to start the PostgresSQL, scheduler and static worker
+1. `WORKER_NAME=worker_manual WORKER_TOPICS=all,europe,poland cargo run --bin worker` to start additional worker
 
 ## RabbitMQ Communication
 
