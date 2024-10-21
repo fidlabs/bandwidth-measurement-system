@@ -2,6 +2,8 @@ name: bms
 volumes:
   bms_postgres:
     name: bms_postgres
+  cargo-cache:
+  target:
 networks:
   bms-network:
     driver: bridge
@@ -11,14 +13,15 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
-    ports:
-      - "5672:5672"
-      - "15672:15672"
     environment:
       - RABBITMQ_DEFAULT_USER=guest
       - RABBITMQ_DEFAULT_PASS=guest
     networks:
       - bms-network
+    ports:
+    - "5672:5672"   # no tls
+    - "15672:15672" # http panel
+    - "15692:15692" # metrics
 
   # postgres and pgadmin
   postgres:
@@ -46,3 +49,87 @@ services:
     depends_on:
       - postgres
 
+  scheduler:
+    build: 
+      context: .
+      dockerfile: Dockerfile.local
+    container_name: scheduler
+    working_dir: /app
+    # run with cargo watch to auto-reload without restarting container
+    command: cargo watch --poll -x 'run --bin scheduler'
+    environment:
+      - RUST_LOG=debug
+      - DATABASE_URL=postgres://pguser:pgpassword@postgres/bms
+      - RABBITMQ_ENDPOINT=amqp://rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=guest
+      - RABBITMQ_PASSWORD=guest
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - .:/app                                      # bind current directory to /app
+      - /dev/null:/app/.env                         # do not use .env file
+      - cargo-cache:/usr/local/cargo                # own cargo cache
+      - target:/app/target                          # own target directory
+      - /var/run/docker.sock:/var/run/docker.sock   # for docker access in docker
+    ports:
+      - "3000:3000"
+    networks:
+      - bms-network
+    depends_on:
+      - rabbitmq
+      - postgres
+
+  worker_static:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.local
+    working_dir: /app
+    stop_grace_period: 60s # matched to max download timeout in worker
+    ## command info
+    # run with cargo watch to auto-reload without restarting container
+    command: cargo watch --poll -x "run --bin worker"
+    environment:
+      - WORKER_NAME=worker_static
+      - WORKER_TOPICS=all,usa
+      - RABBITMQ_ENDPOINT=amqp://rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=guest
+      - RABBITMQ_PASSWORD=guest
+    networks:
+      - bms-network
+    volumes:
+      - .:/app                          # bind current directory to /app
+      - /dev/null:/app/.env             # do not use .env file
+      - cargo-cache:/usr/local/cargo    # own cargo cache
+      - target:/app/target              # own target directory
+    depends_on:
+      - rabbitmq
+      - postgres
+
+  worker_scaled:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.local
+    working_dir: /app
+    stop_grace_period: 60s # matched to max download timeout in worker
+    ## command info
+    # export to set unique worker name 
+    # run with cargo watch to auto-reload without restarting container
+    # exec is required to capture SIGTERM signal
+    command: sh -c 'export WORKER_NAME=$(hostname) && exec cargo watch --poll -x "run --bin worker"'
+    environment:
+      - RABBITMQ_ENDPOINT=amqp://rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=guest
+      - RABBITMQ_PASSWORD=guest
+    networks:
+      - bms-network
+    volumes:
+      - /tmp/bms:/app                   # bind symlink to current directory to /app, required to bypass path conflict between docker and host
+      - /dev/null:/app/.env             # do not use .env file
+      - cargo-cache:/usr/local/cargo    # own cargo cache
+      - target:/app/target              # own target directory
+    scale: 0 # number of worker instances, will be scaled by scheduler
+    depends_on:
+      - rabbitmq
+      - postgres
