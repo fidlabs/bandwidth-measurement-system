@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use color_eyre::Result;
 
-use super::service_scaler::{ServiceScaler, ServiceScalerError, ServiceScalerInfo};
+use super::{ServiceScaler, ServiceScalerError, ServiceScalerInfo};
 
 pub struct FargateScaler;
 
