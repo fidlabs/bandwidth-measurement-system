@@ -1,7 +1,7 @@
 use std::net::{IpAddr, ToSocketAddrs};
 
-use anyhow::Result;
 use chrono::{Duration, Utc};
+use color_eyre::Result;
 use rabbitmq::{JobMessage, PingError, PingResult};
 use rand::random;
 use surge_ping::{Client, Config, PingIdentifier, PingSequence, ICMP};

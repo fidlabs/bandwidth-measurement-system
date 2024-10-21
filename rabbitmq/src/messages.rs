@@ -2,6 +2,14 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+// Messages that can be sent or received
+#[derive(Serialize, Deserialize, Debug)]
+pub enum Message {
+    WorkerJob { job_id: Uuid, payload: JobMessage },
+    WorkerResult { job_id: Uuid, result: ResultMessage },
+    WorkerStatus { status: StatusMessage },
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct JobMessage {
     pub job_id: Uuid,

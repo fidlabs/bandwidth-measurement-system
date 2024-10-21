@@ -1,3 +1,4 @@
+use color_eyre::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::{
     prelude::{FromRow, Type},

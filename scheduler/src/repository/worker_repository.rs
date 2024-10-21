@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use color_eyre::Result;
 use rabbitmq::WorkerStatus;
 use sqlx::PgPool;
 use uuid::Uuid;

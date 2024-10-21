@@ -1,3 +1,4 @@
+use color_eyre::Result;
 use rabbitmq::ResultMessage;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;

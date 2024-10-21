@@ -1,3 +1,4 @@
+use color_eyre::Result;
 use sqlx::{
     prelude::{FromRow, Type},
     PgPool,

@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use anyhow::Result;
+use color_eyre::Result;
 use config::CONFIG;
 use queue::{job_consumer::JobConsumer, status_sender::StatusSender};
 use rabbitmq::*;
@@ -14,6 +14,11 @@ mod queue;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    info!("Worker is starting...");
+
+    // Initialize color_eyre panic and error handlers
+    color_eyre::install()?;
+
     // Load .env
     dotenvy::dotenv()
         .inspect_err(|_| eprintln!("Failed to read .env file, ignoring."))
@@ -32,16 +37,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
         CONFIG.worker_topics,
     );
 
-    let mut job_queue = QueueHandler::clone(&CONFIG_QUEUE_JOB);
-    job_queue.setup().await?;
+    // Initialize RabbitMQ connection
+    let rabbit_connection = rabbitmq::get_connection().await?;
+    info!("Successfully connected to RabbitMQ");
+
+    let mut job_queue = Subscriber::new(get_subscriber_config(SubscriberType::JobSubscriber));
+    job_queue.set_queue_name(CONFIG.worker_name.as_str());
+    job_queue.set_routing_keys(
+        CONFIG
+            .worker_topics
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<&str>>(),
+    );
+    job_queue.setup(rabbit_connection.clone()).await?;
     info!("Successfully set up job queue");
 
-    let mut data_queue = QueueHandler::clone(&CONFIG_QUEUE_RESULT);
-    data_queue.setup().await?;
+    let mut data_queue = Publisher::new(get_publisher_config(PublisherType::ResultPublisher));
+    data_queue.setup(rabbit_connection.clone()).await?;
     info!("Successfully set up data queue");
 
-    let mut status_queue = QueueHandler::clone(&CONFIG_QUEUE_STATUS);
-    status_queue.setup().await?;
+    let mut status_queue = Publisher::new(get_publisher_config(PublisherType::StatusPublisher));
+    status_queue.setup(rabbit_connection.clone()).await?;
     info!("Successfully set up status queue");
     let status_sender = StatusSender::new(status_queue.clone());
 
@@ -62,12 +79,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // TODO: do not accept new jobs and wait for execution of existing ones
     // TODO: maybe lookup tokio::sync::Notify for this
 
+    // Close the connection gracefully
     job_queue.close().await?;
     data_queue.close().await?;
     status_sender
         .send_lifecycle_status(WorkerStatus::Offline)
         .await?;
     status_queue.close().await?;
+    rabbit_connection.lock().await.clone().close().await?;
+
     info!("Worker shut down gracefully");
 
     Ok(())

@@ -1,3 +1,4 @@
+use color_eyre::Result;
 use sqlx::PgPool;
 
 #[derive(Clone)]

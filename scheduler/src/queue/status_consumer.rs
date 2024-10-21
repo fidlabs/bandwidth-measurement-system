@@ -6,8 +6,8 @@ use amqprs::{
     consumer::AsyncConsumer,
     BasicProperties, Deliver,
 };
-use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use color_eyre::{eyre::eyre, Result};
 use rabbitmq::{Message, StatusMessage, WorkerStatus, WorkerStatusDetails};
 use serde_json;
 use tracing::{debug, error, info};
@@ -24,7 +24,7 @@ impl StatusConsumer {
     async fn parse_message(&self, content_str: &str) -> Result<StatusMessage> {
         match serde_json::from_str::<Message>(content_str) {
             Ok(Message::WorkerStatus { status }) => Ok(status),
-            Ok(_) => Err(anyhow!("Received unexpected message")),
+            Ok(_) => Err(eyre!("Received unexpected message")),
             Err(e) => {
                 error!("Error parsing message: {:?}", e);
                 Err(e.into())

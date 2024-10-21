@@ -11,6 +11,10 @@ serde_json = "1.0.127"
 uuid = "1.10.0"
 url = "2.5.2"
 chrono = { version = "0.4.38", features = ["serde"] }
+async-trait = "0.1.83"
+anyhow = "1.0.89"
+tokio = "1.40.0"
+color-eyre = "0.6.3"
 
 
 

@@ -8,8 +8,7 @@ use rabbitmq::*;
 use repository::*;
 use sqlx::{migrate::Migrator, PgPool};
 use state::AppState;
-use tokio::net::TcpListener;
-use tokio::sync::Mutex;
+use tokio::{net::TcpListener, sync::Mutex};
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tracing::info;
@@ -59,8 +58,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let pool = PgPool::connect(&db_url).await?;
     MIGRATOR.run(&pool).await?;
 
-    let job_queue = Arc::new(Mutex::new(QueueHandler::clone(&CONFIG_QUEUE_JOB)));
-    job_queue.lock().await.setup().await?;
+    // Initialize RabbitMQ connection
+    let rabbit_connection = rabbitmq::get_connection().await?;
+    info!("Successfully connected to RabbitMQ");
+
+    let job_queue = Arc::new(Mutex::new(Publisher::new(get_publisher_config(
+        PublisherType::JobPublisher,
+    ))));
+    job_queue
+        .lock()
+        .await
+        .setup(rabbit_connection.clone())
+        .await?;
     info!("Successfully set up job queue");
 
     // Initialize repositories
@@ -80,16 +89,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         sub_job_repo,
     ));
 
-    let mut data_queue = QueueHandler::clone(&CONFIG_QUEUE_RESULT);
-    data_queue.setup().await?;
+    let mut data_queue = Subscriber::new(get_subscriber_config(SubscriberType::ResultSubscriber));
+    data_queue.setup(rabbit_connection.clone()).await?;
     info!("Successfully set up data queue");
 
     let data_consumer = DataConsumer::new(app_state.clone());
     data_queue.subscribe(data_consumer).await?;
     info!("Successfully started data queue consumer");
 
-    let mut status_queue = QueueHandler::clone(&CONFIG_QUEUE_STATUS);
-    status_queue.setup().await?;
+    let mut status_queue = Subscriber::new(get_subscriber_config(SubscriberType::StatusSubscriber));
+    status_queue.setup(rabbit_connection.clone()).await?;
     let status_consumer = StatusConsumer::new(app_state.clone());
     status_queue.subscribe(status_consumer).await?;
     info!("Successfully started status queue consumer");
@@ -116,9 +125,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // TODO: maybe lookup tokio::sync::Notify for this
 
     // Close the connection gracefully
-    job_queue.lock().await.close().await?;
+    job_queue.lock().await.clone().close().await?;
     data_queue.close().await?;
     status_queue.close().await?;
+    rabbit_connection.lock().await.clone().close().await?;
 
     info!("Scheduler shut down gracefully");
 

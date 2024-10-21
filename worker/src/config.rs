@@ -1,6 +1,6 @@
 use std::{collections::HashSet, env};
 
-use anyhow::Result;
+use color_eyre::Result;
 use once_cell::sync::Lazy;
 
 pub static CONFIG: Lazy<Config> = Lazy::new(|| Config::new_from_env().unwrap());

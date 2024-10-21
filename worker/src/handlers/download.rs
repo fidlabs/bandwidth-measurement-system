@@ -1,6 +1,6 @@
-use anyhow::{bail, Result};
 use bytes::Bytes;
 use chrono::{DateTime, Duration, Utc};
+use color_eyre::{eyre::bail, Result};
 use rabbitmq::{AccumulatingBytes, DownloadError, DownloadResult, IntervalBytes, JobMessage};
 use reqwest::{
     header::{ACCEPT, RANGE, USER_AGENT},

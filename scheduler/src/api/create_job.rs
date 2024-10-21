@@ -1,10 +1,10 @@
-use anyhow::Result;
 use axum::{
     debug_handler,
     extract::{Json, State},
 };
 use axum_extra::extract::WithRejection;
 use chrono::Utc;
+use color_eyre::Result;
 use rabbitmq::{JobMessage, Message};
 use rand::Rng;
 use reqwest::Client;

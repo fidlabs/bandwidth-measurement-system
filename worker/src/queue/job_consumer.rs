@@ -3,10 +3,10 @@ use amqprs::{
     consumer::AsyncConsumer,
     BasicProperties, Deliver,
 };
-use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use chrono::Utc;
-use rabbitmq::{JobMessage, Message, QueueHandler, ResultMessage, WorkerStatusJobDetails};
+use color_eyre::{eyre::eyre, Result};
+use rabbitmq::{JobMessage, Message, Publisher, ResultMessage, WorkerStatusJobDetails};
 use serde_json;
 use tokio::time::sleep;
 use tracing::{debug, error, info};
@@ -17,12 +17,12 @@ use crate::{handlers::*, CONFIG};
 use super::status_sender::StatusSender;
 
 pub struct JobConsumer {
-    data_queue: QueueHandler,
+    data_queue: Publisher,
     status_sender: StatusSender,
 }
 
 impl JobConsumer {
-    pub fn new(data_queue: QueueHandler, status_sender: StatusSender) -> Self {
+    pub fn new(data_queue: Publisher, status_sender: StatusSender) -> Self {
         Self {
             data_queue,
             status_sender,
@@ -32,7 +32,7 @@ impl JobConsumer {
     async fn parse_message(&self, content_str: &str) -> Result<(Uuid, JobMessage)> {
         match serde_json::from_str::<Message>(content_str) {
             Ok(Message::WorkerJob { job_id, payload }) => Ok((job_id, payload)),
-            Ok(_) => Err(anyhow!("Received unexpected message")),
+            Ok(_) => Err(eyre!("Received unexpected message")),
             Err(e) => {
                 error!("Error parsing message: {:?}", e);
                 Err(e.into())
@@ -128,7 +128,7 @@ impl JobConsumer {
         // Publish the result
         if let Err(e) = self
             .data_queue
-            .publish(&result_message, self.data_queue.routing_key.unwrap())
+            .publish(&result_message, self.data_queue.config.routing_key.unwrap())
             .await
         {
             error!("Error publishing result: {:?}", e);

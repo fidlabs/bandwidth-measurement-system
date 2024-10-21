@@ -1,18 +1,18 @@
 use chrono::Utc;
 use rabbitmq::{
-    Message, QueueHandler, StatusMessage, WorkerDetails, WorkerStatus, WorkerStatusDetails,
-    WorkerStatusJobDetails, CONFIG_QUEUE_STATUS,
+    Message, Publisher, StatusMessage, WorkerDetails, WorkerStatus, WorkerStatusDetails,
+    WorkerStatusJobDetails,
 };
 
 use crate::CONFIG;
 
 #[derive(Clone)]
 pub struct StatusSender {
-    status_queue: QueueHandler,
+    status_queue: Publisher,
 }
 
 impl StatusSender {
-    pub fn new(status_queue: QueueHandler) -> Self {
+    pub fn new(status_queue: Publisher) -> Self {
         StatusSender { status_queue }
     }
 
@@ -69,7 +69,13 @@ impl StatusSender {
 
     async fn send_status(&self, message: Message) -> Result<(), Box<dyn std::error::Error>> {
         self.status_queue
-            .publish(&message, CONFIG_QUEUE_STATUS.routing_key.unwrap())
+            .publish(
+                &message,
+                self.status_queue
+                    .config
+                    .routing_key
+                    .ok_or("Missing status queue routing key")?,
+            )
             .await?;
 
         Ok(())
