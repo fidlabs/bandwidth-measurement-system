@@ -2206,6 +2206,7 @@ dependencies = [
  "chrono",
  "color-eyre",
  "dotenvy",
+ "once_cell",
  "rabbitmq",
  "rand",
  "reqwest",

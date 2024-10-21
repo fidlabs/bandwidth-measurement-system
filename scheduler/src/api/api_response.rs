@@ -12,6 +12,7 @@ pub enum ApiResponse<T> {
     BadRequest(Json<ErrorResponse>),
     InternalServerError(Json<ErrorResponse>),
     NotFound(Json<ErrorResponse>),
+    Unauthorized(Json<ErrorResponse>),
     OkResponse(Json<T>),
 }
 
@@ -43,6 +44,7 @@ where
             }
             ApiResponse::NotFound(json) => (StatusCode::NOT_FOUND, json).into_response(),
             ApiResponse::OkResponse(json) => (StatusCode::OK, json).into_response(),
+            ApiResponse::Unauthorized(json) => (StatusCode::UNAUTHORIZED, json).into_response(),
         }
     }
 }
@@ -61,4 +63,8 @@ pub fn not_found<T: Into<String>>(msg: T) -> ApiResponse<()> {
 
 pub fn ok_response<T: Serialize>(data: T) -> ApiResponse<T> {
     ApiResponse::OkResponse(Json(data))
+}
+
+pub fn unauthorized<T: Into<String>>(msg: T) -> ApiResponse<()> {
+    ApiResponse::Unauthorized(Json(ErrorResponse { error: msg.into() }))
 }
