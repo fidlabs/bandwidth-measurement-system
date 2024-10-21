@@ -3,7 +3,7 @@ use std::sync::Arc;
 use rabbitmq::Publisher;
 use tokio::sync::Mutex;
 
-use crate::{repository::*, service_scaler::ServiceScaler};
+use crate::{repository::*, service_scaler::service_scaler::ServiceScaler};
 
 pub struct AppState {
     pub job_queue: Arc<Mutex<Publisher>>,

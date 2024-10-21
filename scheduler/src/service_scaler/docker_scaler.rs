@@ -3,7 +3,7 @@ use std::{process::Command, str};
 use async_trait::async_trait;
 use color_eyre::Result;
 
-use super::{ServiceScaler, ServiceScalerError, ServiceScalerInfo};
+use super::service_scaler::{ServiceScaler, ServiceScalerError, ServiceScalerInfo};
 
 pub struct DockerScaler;
 
