@@ -5,20 +5,15 @@ use axum::{
     extract::{Json, State},
 };
 use axum_extra::extract::WithRejection;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tracing::{debug, error};
+use uuid::Uuid;
 
-use crate::{api::api_response::*, state::AppState};
-
-#[derive(Serialize)]
-pub struct ServicesScaleUpResponse {
-    pub name: String,
-    pub instances: u64,
-}
+use crate::{api::api_response::*, service_scaler::ServiceScalerInfo, state::AppState};
 
 #[derive(Deserialize)]
 pub struct ServicesScaleUpInput {
-    pub service_name: String,
+    pub service_id: Uuid,
     pub amount: u64,
 }
 
@@ -31,10 +26,26 @@ pub async fn handle(
         Json<ServicesScaleUpInput>,
         ApiResponse<ErrorResponse>,
     >,
-) -> Result<ApiResponse<ServicesScaleUpResponse>, ApiResponse<()>> {
-    state
-        .service_scaler
-        .scale_up(payload.service_name.clone(), payload.amount)
+) -> Result<ApiResponse<ServiceScalerInfo>, ApiResponse<()>> {
+    // Get service from db
+    let service = state
+        .service_repo
+        .get_service_by_id(&payload.service_id)
+        .await
+        .inspect_err(|e| {
+            error!("ServiceRepository get service error: {:?}", e);
+        })
+        .map_err(|_| internal_server_error("Failed to get service"))?;
+
+    // Retrieve ServiceScaler from registry by provider type
+    let service_scaler = state
+        .service_scaler_registry
+        .get_scaler(&service.provider_type)
+        .ok_or(bad_request("ServiceScaler not found"))?;
+
+    // Scale up the service
+    service_scaler
+        .scale_up(&service, payload.amount)
         .await
         .inspect_err(|e| {
             error!("ServiceScaler scale up error: {:?}", e);
@@ -43,9 +54,9 @@ pub async fn handle(
 
     debug!("Successfull worker scale up");
 
-    let service_info = state
-        .service_scaler
-        .get_info(payload.service_name.clone())
+    // Get service info
+    let service_info = service_scaler
+        .get_info(&service)
         .await
         .inspect_err(|e| {
             error!("ServiceScaler get info error: {:?}", e);
@@ -57,8 +68,5 @@ pub async fn handle(
         service_info.name, service_info.instances
     );
 
-    Ok(ok_response(ServicesScaleUpResponse {
-        name: service_info.name,
-        instances: service_info.instances,
-    }))
+    Ok(ok_response(service_info))
 }
