@@ -65,6 +65,7 @@ services:
       - RABBITMQ_USERNAME=guest
       - RABBITMQ_PASSWORD=guest
       - DOCKER_HOST=unix:///var/run/docker.sock
+      - LOCAL_MODE=true
     volumes:
       - .:/app                                      # bind current directory to /app
       - /dev/null:/app/.env                         # do not use .env file
@@ -118,6 +119,7 @@ services:
     # exec is required to capture SIGTERM signal
     command: sh -c 'export WORKER_NAME=$(hostname) && exec cargo watch --poll -x "run --bin worker"'
     environment:
+      - WORKER_TOPICS=all,europe,poland
       - RABBITMQ_ENDPOINT=amqp://rabbitmq
       - RABBITMQ_PORT=5672
       - RABBITMQ_USERNAME=guest

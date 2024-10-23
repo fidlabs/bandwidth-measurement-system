@@ -4,7 +4,7 @@ use axum::{
     extract::Request,
     middleware::{self, Next},
     response::Response,
-    routing::{get, post},
+    routing::{delete, get, post},
     Router,
 };
 
@@ -37,7 +37,9 @@ pub fn create_routes() -> Router<Arc<AppState>> {
         .route("/job", post(create_job::handle));
 
     let auth_routes = Router::new()
-        // TODO make info GET
+        .route("/services", get(services::get_services::handle))
+        .route("/services", post(services::create_service::handle))
+        .route("/services", delete(services::delete_service::handle))
         .route("/services/scale/info", get(services::services_info::handle))
         .route(
             "/services/scale/up",

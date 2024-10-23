@@ -12,6 +12,7 @@ pub struct Config {
     pub db_url: String,
     pub log_level: String,
     pub auth_token: String,
+    pub local_mode: String,
 }
 impl Config {
     pub fn new_from_env() -> Result<Self, anyhow::Error> {
@@ -31,6 +32,7 @@ impl Config {
             log_level: env::var("LOG_LEVEL").unwrap_or("info".to_string()),
             auth_token: env::var("AUTH_TOKEN")
                 .unwrap_or("mysecrettokenthatdefinatelyisnotongithubpublicrepo".to_string()),
+            local_mode: env::var("LOCAL_MODE").unwrap_or("false".to_string()),
         })
     }
 }
