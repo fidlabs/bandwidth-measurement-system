@@ -4,7 +4,10 @@ use color_eyre::Result;
 use config::CONFIG;
 use queue::{job_consumer::JobConsumer, status_sender::StatusSender};
 use rabbitmq::*;
-use tokio::time::{interval, Duration};
+use tokio::{
+    signal::unix::{signal, SignalKind},
+    time::{interval, Duration},
+};
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
@@ -73,8 +76,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
     job_queue.subscribe(consumer).await?;
     info!("Successfully started job queue consumer");
 
-    tokio::signal::ctrl_c().await?;
-    info!("Received SIGINT signal, Shutting down...");
+    let mut sigint = signal(SignalKind::interrupt())?;
+    let mut sigterm = signal(SignalKind::terminate())?;
+
+    info!("Worker is ready. Waiting for shutdown signal...");
+
+    tokio::select! {
+        _ = sigint.recv() => {
+            info!("Received SIGINT signal, shutting down...");
+        }
+        _ = sigterm.recv() => {
+            info!("Received SIGTERM signal, shutting down...");
+        }
+    }
+    info!("Worker is shutting down...");
+
+    status_sender
+        .send_lifecycle_status(WorkerStatus::Offline)
+        .await?;
+    info!("Worker sent offline status");
 
     // TODO: do not accept new jobs and wait for execution of existing ones
     // TODO: maybe lookup tokio::sync::Notify for this
@@ -82,9 +102,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Close the connection gracefully
     job_queue.close().await?;
     data_queue.close().await?;
-    status_sender
-        .send_lifecycle_status(WorkerStatus::Offline)
-        .await?;
     status_queue.close().await?;
     rabbit_connection.lock().await.clone().close().await?;
 

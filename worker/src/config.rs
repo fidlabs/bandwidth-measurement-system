@@ -15,7 +15,7 @@ pub struct Config {
 impl Config {
     pub fn new_from_env() -> Result<Self, anyhow::Error> {
         let mut worker_topics: Vec<String> = env::var("WORKER_TOPICS")
-            .unwrap_or_else(|_| "all".to_string())
+            .unwrap_or("all".to_string())
             .split(',')
             .map(|s| s.to_string())
             .collect::<HashSet<_>>()
@@ -31,10 +31,10 @@ impl Config {
             worker_name: env::var("WORKER_NAME").expect("WORKER_NAME is not set"),
             worker_topics,
             heartbeat_interval_sec: env::var("HEARTBEAT_INTERVAL_SEC")
-                .unwrap_or_else(|_| "5".to_string())
+                .unwrap_or("5".to_string())
                 .parse::<u64>()
                 .expect("Invalid HEARTBEAT_INTERVAL value"),
-            log_level: env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
+            log_level: env::var("LOG_LEVEL").unwrap_or("info".to_string()),
         })
     }
 }

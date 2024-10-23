@@ -1,24 +1,30 @@
-use std::{env, error::Error, sync::Arc};
+use std::{error::Error, sync::Arc};
 
 use axum::Router;
 use color_eyre::Result;
-use queue::data_consumer::DataConsumer;
-use queue::status_consumer::StatusConsumer;
+use config::CONFIG;
+use queue::{data_consumer::DataConsumer, status_consumer::StatusConsumer};
 use rabbitmq::*;
 use repository::*;
+use service_scaler::docker_scaler::DockerScaler;
 use sqlx::{migrate::Migrator, PgPool};
 use state::AppState;
-use tokio::{net::TcpListener, sync::Mutex};
+use tokio::{
+    net::TcpListener,
+    signal::unix::{signal, SignalKind},
+    sync::Mutex,
+};
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
-use types::DbConnectParams;
 
 mod api;
+mod config;
 mod queue;
 mod repository;
 mod routes;
+mod service_scaler;
 mod state;
 mod types;
 
@@ -37,25 +43,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .ok();
 
     // Initialize logging
-    let log_level = env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level)),
+            EnvFilter::try_from_default_env().unwrap_or(EnvFilter::new(CONFIG.log_level.clone())),
         )
         .init();
 
-    // Initialize database connection pool & run migrations
-    let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
-        let json_params = env::var("DB_CONNECT_PARAMS_JSON")
-            .expect("DB_CONNECT_PARAMS_JSON environment variable not set");
-
-        let params: DbConnectParams =
-            serde_json::from_str(&json_params).expect("Invalid JSON in DB_CONNECT_PARAMS_JSON");
-
-        params.to_url()
-    });
-
-    let pool = PgPool::connect(&db_url).await?;
+    let pool = PgPool::connect(&CONFIG.db_url).await?;
     MIGRATOR.run(&pool).await?;
 
     // Initialize RabbitMQ connection
@@ -79,6 +73,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let topic_repo = Arc::new(TopicRepository::new(pool.clone()));
     let sub_job_repo = Arc::new(SubJobRepository::new(pool.clone()));
 
+    // Initialize service scaler
+    let service_scaler = Arc::new(DockerScaler::new());
+
     // Initialize app state
     let app_state = Arc::new(AppState::new(
         job_queue.clone(),
@@ -87,6 +84,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         job_repo,
         topic_repo,
         sub_job_repo,
+        service_scaler,
     ));
 
     let mut data_queue = Subscriber::new(get_subscriber_config(SubscriberType::ResultSubscriber));
@@ -136,8 +134,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 async fn shutdown_signal() {
-    match tokio::signal::ctrl_c().await {
-        Ok(_) => info!("Received SIGINT signal, Shutting down..."),
-        Err(e) => panic!("Failed to listen for SIGINT signal: {}", e),
+    let mut sigint = signal(SignalKind::interrupt()).expect("SIGINT signal handler failed");
+    let mut sigterm = signal(SignalKind::terminate()).expect("SIGTERM signal handler failed");
+
+    tokio::select! {
+        _ = sigint.recv() => {
+            info!("Received SIGINT signal, shutting down...");
+        }
+        _ = sigterm.recv() => {
+            info!("Received SIGTERM signal, shutting down...");
+        }
     }
 }

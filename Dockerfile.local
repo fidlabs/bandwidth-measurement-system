@@ -1,0 +1,33 @@
+# syntax=docker/dockerfile:1.5
+FROM lukemathwalker/cargo-chef:latest-rust-1.80.1-slim-bullseye as chef
+
+WORKDIR /app
+
+# install dependencies
+RUN apt-get update && \
+    apt-get install -y build-essential libssl-dev pkg-config curl apt-transport-https ca-certificates gnupg2 software-properties-common && \
+    rm -rf /var/lib/apt/lists/*
+
+# install docker cli
+RUN curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
+RUN add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
+RUN apt-get update && \
+    apt-get install -y docker-ce-cli && \
+    rm -rf /var/lib/apt/lists/*
+
+# install cargo-watch for automatic recompilation
+RUN cargo install cargo-watch
+
+# copy cargo files for caching
+COPY Cargo.toml Cargo.lock ./
+COPY scheduler/Cargo.toml ./scheduler/
+COPY worker/Cargo.toml ./worker/
+COPY rabbitmq/Cargo.toml ./rabbitmq/
+
+# dummy main.rs
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN cargo build --release || true
+
+EXPOSE 3000
+
+CMD ["sleep", "infinity"]
