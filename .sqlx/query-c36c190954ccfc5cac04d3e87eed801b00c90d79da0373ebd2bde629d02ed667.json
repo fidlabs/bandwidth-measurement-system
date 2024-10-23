@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO services (name, provider_type, details, is_enabled)\n            VALUES ($1, $2, $3, $4)\n            RETURNING id, name, provider_type as \"provider_type!: ProviderType\", details, is_enabled\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider_type!: ProviderType",
+        "type_info": {
+          "Custom": {
+            "name": "provider_type",
+            "kind": {
+              "Enum": [
+                "docker_local",
+                "aws_fargate"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "details",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_enabled",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        {
+          "Custom": {
+            "name": "provider_type",
+            "kind": {
+              "Enum": [
+                "docker_local",
+                "aws_fargate"
+              ]
+            }
+          }
+        },
+        "Jsonb",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c36c190954ccfc5cac04d3e87eed801b00c90d79da0373ebd2bde629d02ed667"
+}
