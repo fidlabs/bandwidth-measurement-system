@@ -10,9 +10,10 @@ pub struct DataRepository {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct BmsData {
+pub struct WorkerData {
     pub id: Uuid,
     pub worker_name: Option<String>,
+    pub is_success: Option<bool>,
     pub download: serde_json::Value,
     pub ping: serde_json::Value,
     pub head: serde_json::Value,
@@ -61,5 +62,24 @@ impl DataRepository {
         .await?;
 
         Ok(())
+    }
+
+    pub async fn get_data_by_sub_job_id(
+        &self,
+        sub_job_id: &Uuid,
+    ) -> Result<Vec<WorkerData>, sqlx::Error> {
+        let data = sqlx::query_as!(
+            WorkerData,
+            r#"
+            SELECT id, worker_name, is_success, download, ping, head
+            FROM worker_data
+            WHERE sub_job_id = $1
+            "#,
+            sub_job_id
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(data)
     }
 }

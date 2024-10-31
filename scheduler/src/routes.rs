@@ -8,13 +8,13 @@ use axum::{
     Router,
 };
 
-use crate::state::AppState;
 use crate::{
     api::{
         api_response::{unauthorized, ApiResponse},
         create_job, get_data, healthcheck, services,
     },
     config::CONFIG,
+    state::AppState,
 };
 
 async fn auth(req: Request, next: Next) -> Result<Response, ApiResponse<()>> {

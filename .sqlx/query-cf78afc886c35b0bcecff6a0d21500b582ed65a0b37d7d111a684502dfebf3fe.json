@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO jobs (id, url, routing_key, status, details)\n            VALUES ($1, $2, $3, $4, $5)\n            RETURNING id, url, routing_key, status as \"status!: JobStatus\", details as \"details!: serde_json::Value\"\n            ",
+  "query": "\n            SELECT id, url, routing_key, status as \"status!: JobStatus\", details as \"details!: serde_json::Value\"\n            FROM jobs\n            WHERE id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -45,25 +45,7 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Varchar",
-        "Varchar",
-        {
-          "Custom": {
-            "name": "job_status",
-            "kind": {
-              "Enum": [
-                "created",
-                "pending",
-                "processing",
-                "completed",
-                "failed",
-                "canceled"
-              ]
-            }
-          }
-        },
-        "Jsonb"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -74,5 +56,5 @@
       false
     ]
   },
-  "hash": "e5bb58d2f98a6a27de8df353e6d87eaea3af9b7429b41dc4947d2a7535727682"
+  "hash": "cf78afc886c35b0bcecff6a0d21500b582ed65a0b37d7d111a684502dfebf3fe"
 }

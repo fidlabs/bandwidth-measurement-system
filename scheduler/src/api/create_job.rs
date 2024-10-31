@@ -3,15 +3,12 @@ use axum::{
     extract::{Json, State},
 };
 use axum_extra::extract::WithRejection;
-use chrono::Utc;
 use color_eyre::Result;
-use rabbitmq::{JobMessage, Message};
 use rand::Rng;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
-use std::time::Duration;
 use tracing::{debug, info};
 use url::Url;
 use uuid::Uuid;
@@ -35,10 +32,6 @@ pub struct JobResponse {
     pub sub_jobs: Vec<Uuid>,
 }
 
-const MAX_DOWNLOAD_DURATION_SECS: u64 = 60;
-const DOWNLOAD_DELAY_SECS: u64 = 10;
-const SYNC_DELAY_SECS: u64 = 1;
-
 /// POST /job
 /// Create a new job to be processed by the worker
 #[debug_handler]
@@ -55,7 +48,8 @@ pub async fn handle(
     let job_id = Uuid::new_v4();
 
     let job = state
-        .job_repo
+        .repo
+        .job
         .create_job(
             job_id,
             url.to_string(),
@@ -71,16 +65,23 @@ pub async fn handle(
 
     debug!("Job created successfully: {:?}", job);
 
-    // Calculate the start time for the sub jobs
-    let start_time = Utc::now() + Duration::from_secs(SYNC_DELAY_SECS);
-    let job_duration = Duration::from_secs(DOWNLOAD_DELAY_SECS)
-        + Duration::from_secs(MAX_DOWNLOAD_DURATION_SECS)
-        + Duration::from_secs(SYNC_DELAY_SECS);
-    let delayed_start_time = start_time + job_duration;
+    state
+        .repo
+        .sub_job
+        .create_sub_job(
+            Uuid::new_v4(),
+            job.id,
+            SubJobStatus::Created,
+            SubJobType::Scaling,
+            json!({
+                "topic": job.routing_key,
+            }),
+        )
+        .await
+        .map_err(|_| internal_server_error("Failed to create scaling sub job"))?;
 
-    // Createa sub jobs and send them to the worker
-    let sub_job_1 = create_and_dispatch_subjob(&state, &job, start_time).await?;
-    let sub_job_2 = create_and_dispatch_subjob(&state, &job, delayed_start_time).await?;
+    let sub_job_1 = create_sub_job(&state, &job).await?;
+    let sub_job_2 = create_sub_job(&state, &job).await?;
 
     let sub_jobs = vec![sub_job_1.id, sub_job_2.id];
 
@@ -150,55 +151,21 @@ async fn get_file_range_for_file(url: &str) -> Result<(u64, u64), ApiResponse<()
     Ok((start_range, end_range))
 }
 
-async fn create_and_dispatch_subjob(
-    state: &Arc<AppState>,
-    job: &Job,
-    start_time: chrono::DateTime<Utc>,
-) -> Result<SubJob, ApiResponse<()>> {
-    let download_start_time = start_time + Duration::from_secs(DOWNLOAD_DELAY_SECS);
-
+async fn create_sub_job(state: &Arc<AppState>, job: &Job) -> Result<SubJob, ApiResponse<()>> {
     let sub_job = state
-        .sub_job_repo
+        .repo
+        .sub_job
         .create_sub_job(
             Uuid::new_v4(),
             job.id,
-            SubJobStatus::Pending,
+            SubJobStatus::Created,
             SubJobType::CombinedDHP,
-            json!({
-                "start_time": start_time,
-                "donwload_start_time": download_start_time,
-                // TODO: optional worker names whitelist
-            }),
+            json!({}),
         )
         .await
         .map_err(|_| internal_server_error("Failed to create sub job"))?;
 
     debug!("Sub job created successfully: {:?}", sub_job);
-
-    let job_message = Message::WorkerJob {
-        job_id: job.id,
-        payload: JobMessage {
-            job_id: job.id,
-            sub_job_id: sub_job.id,
-            url: job.url.clone(),
-            start_time,
-            download_start_time,
-            start_range: job.details.start_range,
-            end_range: job.details.end_range,
-        },
-    };
-
-    debug!("Publishing job message: {:?}", job_message);
-
-    state
-        .job_queue
-        .lock()
-        .await
-        .publish(&job_message, &job.routing_key)
-        .await
-        .map_err(|_| internal_server_error("Failed to publish job message"))?;
-
-    debug!("Job message published successfully: {}", sub_job.id);
 
     Ok(sub_job)
 }

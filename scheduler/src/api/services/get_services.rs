@@ -13,7 +13,8 @@ pub async fn handle(
 ) -> Result<ApiResponse<Vec<Service>>, ApiResponse<()>> {
     // Get all services
     let services = state
-        .service_repo
+        .repo
+        .service
         .get_services()
         .await
         .inspect_err(|e| {

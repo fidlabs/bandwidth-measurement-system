@@ -1,13 +1,13 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE jobs\n            SET status = $1\n            WHERE id = $2\n            ",
+  "query": "\n            UPDATE sub_jobs\n            SET status = $1, details = jsonb_set(details, '{error}', $3, true)\n            WHERE id = $2\n            ",
   "describe": {
     "columns": [],
     "parameters": {
       "Left": [
         {
           "Custom": {
-            "name": "job_status",
+            "name": "sub_job_status",
             "kind": {
               "Enum": [
                 "created",
@@ -20,10 +20,11 @@
             }
           }
         },
-        "Uuid"
+        "Uuid",
+        "Jsonb"
       ]
     },
     "nullable": []
   },
-  "hash": "53d8bb8ea192b275e91d2069a71e24047b9be830ba8a6aefc7d3d23a92b2ae66"
+  "hash": "833d0198e0bdc7f229b6e3308d839f988c34015671d5b6f421302a974add1043"
 }

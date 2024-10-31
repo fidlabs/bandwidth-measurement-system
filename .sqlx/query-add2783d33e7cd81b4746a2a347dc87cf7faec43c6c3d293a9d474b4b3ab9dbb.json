@@ -17,7 +17,8 @@
             "name": "sub_job_type",
             "kind": {
               "Enum": [
-                "combineddhp"
+                "combineddhp",
+                "scaling"
               ]
             }
           }

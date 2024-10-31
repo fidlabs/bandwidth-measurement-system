@@ -1,6 +1,10 @@
 use std::{error::Error, sync::Arc};
 
 use axum::Router;
+use background::{
+    service_descaler::service_descaler_handler, sub_job_handler::sub_job_handler,
+    worker_online_check::process_worker_online_check,
+};
 use color_eyre::Result;
 use config::CONFIG;
 use queue::{data_consumer::DataConsumer, status_consumer::StatusConsumer};
@@ -20,6 +24,7 @@ use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 mod api;
+mod background;
 mod config;
 mod queue;
 mod repository;
@@ -67,27 +72,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("Successfully set up job queue");
 
     // Initialize repositories
-    let data_repo = Arc::new(DataRepository::new(pool.clone()));
-    let worker_repo = Arc::new(WorkerRepository::new(pool.clone()));
-    let job_repo = Arc::new(JobRepository::new(pool.clone()));
-    let topic_repo = Arc::new(TopicRepository::new(pool.clone()));
-    let sub_job_repo = Arc::new(SubJobRepository::new(pool.clone()));
-    let service_repo = Arc::new(ServiceRepository::new(pool.clone()));
+    let repo = Arc::new(Repositories::new(pool.clone()));
 
     // Initialize service scaler registry
     let service_scaler_registry = Arc::new(ServiceScalerRegistry::new());
 
     // Initialize app state
-    let app_state = Arc::new(AppState {
-        job_queue: job_queue.clone(),
-        data_repo,
-        worker_repo,
-        job_repo,
-        topic_repo,
-        sub_job_repo,
-        service_repo,
-        service_scaler_registry,
-    });
+    let app_state = Arc::new(AppState::new(repo.clone(), service_scaler_registry.clone()));
+
+    tokio::spawn(sub_job_handler(
+        repo.clone(),
+        job_queue.clone(),
+        service_scaler_registry.clone(),
+    ));
+    tokio::spawn(service_descaler_handler(
+        repo.clone(),
+        service_scaler_registry.clone(),
+    ));
+    tokio::spawn(process_worker_online_check(repo.clone()));
 
     let mut data_queue = Subscriber::new(get_subscriber_config(SubscriberType::ResultSubscriber));
     data_queue.setup(rabbit_connection.clone()).await?;

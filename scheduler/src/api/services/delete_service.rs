@@ -28,7 +28,8 @@ pub async fn handle(
 ) -> Result<ApiResponse<Service>, ApiResponse<()>> {
     // Create the service
     let service = state
-        .service_repo
+        .repo
+        .service
         .delete_service_by_id(&payload.service_id)
         .await
         .inspect_err(|e| {

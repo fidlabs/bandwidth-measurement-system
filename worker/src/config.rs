@@ -13,7 +13,7 @@ pub struct Config {
     pub heartbeat_interval_sec: u64,
 }
 impl Config {
-    pub fn new_from_env() -> Result<Self, anyhow::Error> {
+    pub fn new_from_env() -> Result<Self> {
         let mut worker_topics: Vec<String> = env::var("WORKER_TOPICS")
             .unwrap_or("all".to_string())
             .split(',')

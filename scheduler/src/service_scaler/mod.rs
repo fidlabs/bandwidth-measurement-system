@@ -4,6 +4,7 @@ pub mod fargate_scaler;
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
+use color_eyre::Result;
 use docker_scaler::DockerScaler;
 use fargate_scaler::FargateScaler;
 use serde::Serialize;
@@ -19,6 +20,21 @@ pub enum ServiceScalerError {
     CommandError(String),
     GenericError(String),
     InvalidService(String),
+}
+impl ServiceScalerError {
+    pub fn to_str(&self) -> String {
+        match self {
+            ServiceScalerError::CommandError(msg) => {
+                format!("ServiceScalerError::CommandError: {}", msg)
+            }
+            ServiceScalerError::GenericError(msg) => {
+                format!("ServiceScalerError::GenericError: {}", msg)
+            }
+            ServiceScalerError::InvalidService(msg) => {
+                format!("ServiceScalerError::InvalidService: {}", msg)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]

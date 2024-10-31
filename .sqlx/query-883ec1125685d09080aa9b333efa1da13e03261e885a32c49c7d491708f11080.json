@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT w.worker_name\n            FROM workers as w\n            JOIN worker_topics as wt ON w.worker_name = wt.worker_name\n            WHERE w.status = 'online' AND wt.topic_id = (\n                SELECT id FROM topics WHERE name = $1\n            )\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "worker_name",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "883ec1125685d09080aa9b333efa1da13e03261e885a32c49c7d491708f11080"
+}
