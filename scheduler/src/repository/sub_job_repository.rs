@@ -136,13 +136,16 @@ impl SubJobRepository {
         Ok(())
     }
 
-    pub async fn count_pending_sub_jobs(&self, job_id: Uuid) -> Result<i64, sqlx::Error> {
-        let sub_job_type = SubJobType::CombinedDHP;
+    pub async fn count_pending_sub_jobs(
+        &self,
+        sub_job_type: SubJobType,
+        job_id: &Uuid,
+    ) -> Result<i64, sqlx::Error> {
         let count = sqlx::query!(
             r#"
             SELECT COUNT(*) as count
             FROM sub_jobs
-            WHERE job_id = $1 AND type = $2 AND status = 'pending'
+            WHERE job_id = $1 AND type = $2 AND status IN ('created', 'pending', 'processing')
             "#,
             job_id,
             sub_job_type as SubJobType,

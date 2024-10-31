@@ -140,7 +140,7 @@ impl JobRepository {
 
     pub async fn update_job_status(
         &self,
-        job_id: Uuid,
+        job_id: &Uuid,
         status: JobStatus,
     ) -> Result<(), sqlx::Error> {
         sqlx::query!(

@@ -7,8 +7,8 @@ use tokio::sync::Mutex;
 use tracing::{debug, error};
 
 use crate::{
-    job_repository::Job,
-    sub_job_repository::{SubJob, SubJobStatus},
+    job_repository::{Job, JobStatus},
+    sub_job_repository::{SubJob, SubJobStatus, SubJobType},
     Repositories,
 };
 
@@ -136,6 +136,29 @@ async fn process_status_processing(
             .update_sub_job_status(&sub_job.id, SubJobStatus::Completed)
             .await
             .map_err(|e| SubJobHandlerError::Skip(e.to_string()))?;
+
+        // Check if all sub jobs are completed
+        let pending_sub_jobs = repo
+            .sub_job
+            .count_pending_sub_jobs(SubJobType::CombinedDHP, &sub_job.job_id)
+            .await
+            .map_err(|e| {
+                SubJobHandlerError::Skip(format!("Failed to count pending sub jobs: {}", e))
+            })?;
+
+        debug!("Pending sub jobs: {}", pending_sub_jobs);
+
+        // Update the job status if all sub jobs are completed
+        if pending_sub_jobs == 0 {
+            debug!("All sub jobs completed for job_id: {}", &sub_job.job_id);
+
+            repo.job
+                .update_job_status(&sub_job.job_id, JobStatus::Completed)
+                .await
+                .map_err(|e| {
+                    SubJobHandlerError::Skip(format!("Failed to update job status: {}", e))
+                })?;
+        }
     }
 
     Ok(())
