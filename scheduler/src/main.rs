@@ -6,7 +6,7 @@ use config::CONFIG;
 use queue::{data_consumer::DataConsumer, status_consumer::StatusConsumer};
 use rabbitmq::*;
 use repository::*;
-use service_scaler::docker_scaler::DockerScaler;
+use service_scaler::ServiceScalerRegistry;
 use sqlx::{migrate::Migrator, PgPool};
 use state::AppState;
 use tokio::{
@@ -72,20 +72,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let job_repo = Arc::new(JobRepository::new(pool.clone()));
     let topic_repo = Arc::new(TopicRepository::new(pool.clone()));
     let sub_job_repo = Arc::new(SubJobRepository::new(pool.clone()));
+    let service_repo = Arc::new(ServiceRepository::new(pool.clone()));
 
-    // Initialize service scaler
-    let service_scaler = Arc::new(DockerScaler::new());
+    // Initialize service scaler registry
+    let service_scaler_registry = Arc::new(ServiceScalerRegistry::new());
 
     // Initialize app state
-    let app_state = Arc::new(AppState::new(
-        job_queue.clone(),
+    let app_state = Arc::new(AppState {
+        job_queue: job_queue.clone(),
         data_repo,
         worker_repo,
         job_repo,
         topic_repo,
         sub_job_repo,
-        service_scaler,
-    ));
+        service_repo,
+        service_scaler_registry,
+    });
 
     let mut data_queue = Subscriber::new(get_subscriber_config(SubscriberType::ResultSubscriber));
     data_queue.setup(rabbit_connection.clone()).await?;

@@ -5,20 +5,15 @@ use axum::{
     extract::{Query, State},
 };
 use axum_extra::extract::WithRejection;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tracing::{debug, error};
+use uuid::Uuid;
 
-use crate::{api::api_response::*, state::AppState};
+use crate::{api::api_response::*, service_scaler::ServiceScalerInfo, state::AppState};
 
 #[derive(Deserialize)]
 pub struct ServicesScaleInfoInput {
-    pub service_name: String,
-}
-
-#[derive(Serialize)]
-pub struct ServicesInfoResponse {
-    pub status: String,
-    pub count: u64,
+    pub service_id: Uuid,
 }
 
 /// GET /services/info?service_name={service_name}
@@ -30,10 +25,23 @@ pub async fn handle(
         ApiResponse<ErrorResponse>,
     >,
     State(state): State<Arc<AppState>>,
-) -> Result<ApiResponse<ServicesInfoResponse>, ApiResponse<()>> {
+) -> Result<ApiResponse<ServiceScalerInfo>, ApiResponse<()>> {
+    // Get service from db
+    let service = state
+        .service_repo
+        .get_service_by_id(&params.service_id)
+        .await
+        .inspect_err(|e| {
+            error!("ServiceRepository get service error: {:?}", e);
+        })
+        .map_err(|_| internal_server_error("Failed to get service"))?;
+
+    // Get service info
     let scaler_info = state
-        .service_scaler
-        .get_info(params.service_name)
+        .service_scaler_registry
+        .get_scaler(&service.provider_type)
+        .ok_or(bad_request("ServiceScaler not found"))?
+        .get_info(&service)
         .await
         .inspect_err(|e| {
             error!("ServiceScaler get info error: {:?}", e);
@@ -45,8 +53,5 @@ pub async fn handle(
         scaler_info.name, scaler_info.instances
     );
 
-    Ok(ok_response(ServicesInfoResponse {
-        status: "ok".to_string(),
-        count: scaler_info.instances,
-    }))
+    Ok(ok_response(scaler_info))
 }

@@ -3,41 +3,33 @@ use std::{process::Command, str};
 use async_trait::async_trait;
 use color_eyre::Result;
 
+use crate::service_repository::Service;
+
 use super::{ServiceScaler, ServiceScalerError, ServiceScalerInfo};
 
 pub struct DockerScaler;
 
 #[async_trait]
 impl ServiceScaler for DockerScaler {
-    async fn scale_up(&self, service_name: String, amount: u64) -> Result<(), ServiceScalerError> {
-        let current_count = self.get_instance_count(&service_name)?;
+    async fn scale_up(&self, service: &Service, amount: u64) -> Result<(), ServiceScalerError> {
+        let current_count = self.get_instance_count(&service.name)?;
         let new_count = current_count + amount;
 
-        self.scale_service(&service_name, new_count)?;
+        self.scale_service(&service.name, new_count)?;
         Ok(())
     }
 
-    async fn scale_down(
-        &self,
-        service_name: String,
-        amount: u64,
-    ) -> Result<(), ServiceScalerError> {
-        let current_count = self.get_instance_count(&service_name)?;
+    async fn scale_down(&self, service: &Service, amount: u64) -> Result<(), ServiceScalerError> {
+        let current_count = self.get_instance_count(&service.name)?;
         let new_count = current_count.saturating_sub(amount);
 
-        self.scale_service(&service_name, new_count)?;
+        self.scale_service(&service.name, new_count)?;
         Ok(())
     }
 
-    async fn get_info(
-        &self,
-        service_name: String,
-    ) -> Result<ServiceScalerInfo, ServiceScalerError> {
-        let instances = self.get_instance_count(&service_name)?;
-        Ok(ServiceScalerInfo {
-            name: service_name.clone(),
-            instances,
-        })
+    async fn get_info(&self, service: &Service) -> Result<ServiceScalerInfo, ServiceScalerError> {
+        let instances = self.get_instance_count(&service.name)?;
+        Ok(ServiceScalerInfo::docker(service.name.clone(), instances))
     }
 }
 

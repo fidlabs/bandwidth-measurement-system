@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, name, provider_type as \"provider_type!: ProviderType\", details, is_enabled\n            FROM services\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider_type!: ProviderType",
+        "type_info": {
+          "Custom": {
+            "name": "provider_type",
+            "kind": {
+              "Enum": [
+                "docker_local",
+                "aws_fargate"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "details",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_enabled",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "86ab2c2ee7d814b39e914c7572cec332a5fdd6822aa4dd640df28fd424a61c90"
+}
