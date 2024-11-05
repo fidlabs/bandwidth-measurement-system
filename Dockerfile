@@ -17,7 +17,7 @@ COPY . .
 RUN cargo build --release --bins
 
 FROM debian:bullseye-slim as run
-RUN apt-get update && apt-get -y install ca-certificates libc6 iputils-ping
+RUN apt-get update && apt-get -y install ca-certificates libc6 iputils-ping curl jq
 
 COPY --from=build /app/target/release/scheduler /usr/local/bin/
 COPY --from=build /app/target/release/worker /usr/local/bin/
