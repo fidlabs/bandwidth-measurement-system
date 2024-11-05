@@ -38,7 +38,8 @@ pub async fn handle(
     info!("Getting data for job_id: {}", job_id);
 
     let job = state
-        .job_repo
+        .repo
+        .job
         .get_job_by_id_with_data(job_id)
         .await
         .map_err(|e| match e {

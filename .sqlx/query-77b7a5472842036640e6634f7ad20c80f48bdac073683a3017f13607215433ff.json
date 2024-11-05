@@ -1,13 +1,13 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE jobs\n            SET status = $1\n            WHERE id = $2\n            ",
+  "query": "\n            UPDATE sub_jobs\n            SET status = $1, deadline_at = $2\n            WHERE id = $3\n            ",
   "describe": {
     "columns": [],
     "parameters": {
       "Left": [
         {
           "Custom": {
-            "name": "job_status",
+            "name": "sub_job_status",
             "kind": {
               "Enum": [
                 "created",
@@ -20,10 +20,11 @@
             }
           }
         },
+        "Timestamptz",
         "Uuid"
       ]
     },
     "nullable": []
   },
-  "hash": "53d8bb8ea192b275e91d2069a71e24047b9be830ba8a6aefc7d3d23a92b2ae66"
+  "hash": "77b7a5472842036640e6634f7ad20c80f48bdac073683a3017f13607215433ff"
 }

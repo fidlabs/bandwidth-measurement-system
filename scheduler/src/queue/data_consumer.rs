@@ -12,7 +12,7 @@ use serde_json;
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
-use crate::{job_repository::JobStatus, state::AppState, sub_job_repository::SubJobStatus};
+use crate::state::AppState;
 
 pub struct DataConsumer {
     state: Arc<AppState>,
@@ -39,41 +39,8 @@ impl DataConsumer {
         info!("Handling data message");
         debug!("Handling data message: {:?} {:?}", job_id, result_message);
 
-        let sub_job_id = result_message.sub_job_id;
-        let is_success = result_message.is_success;
-
         // Save the data
-        self.state.data_repo.save_data(result_message).await?;
-        // Update the sub job status
-        self.state
-            .sub_job_repo
-            .update_sub_job_status(
-                &sub_job_id,
-                if is_success {
-                    SubJobStatus::Completed
-                } else {
-                    SubJobStatus::Failed
-                },
-            )
-            .await?;
-
-        // Check if all sub jobs are completed
-        let pending_sub_jobs = self
-            .state
-            .sub_job_repo
-            .count_pending_sub_jobs(job_id)
-            .await?;
-        debug!("Pending sub jobs: {}", pending_sub_jobs);
-
-        // Update the job status if all sub jobs are completed
-        if pending_sub_jobs == 0 {
-            debug!("All sub jobs completed for job_id: {}", job_id);
-
-            self.state
-                .job_repo
-                .update_job_status(job_id, JobStatus::Completed)
-                .await?;
-        }
+        self.state.repo.data.save_data(result_message).await?;
 
         Ok(())
     }

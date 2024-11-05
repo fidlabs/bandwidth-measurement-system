@@ -1,4 +1,4 @@
-.PHONY: check format lint docs build stop run logs run-logs restart restart-logs services prepare rabbitmq r symlink migration migrate revert remigrate
+.PHONY: check format lint docs build stop run logs run-logs restart restart-logs services prepare rabbitmq r rm-symlink symlink migration migrate revert remigrate
 
 migration_source = $(PWD)/scheduler/src/migrations
 
@@ -41,7 +41,7 @@ r: rabbitmq
 services:
 	@docker compose up -d rabbitmq postgres pgadmin
 
-run:
+run: rm-symlink symlink
 	@docker compose up -d
 
 logs:
@@ -56,7 +56,10 @@ prepare:
 	@cargo fmt
 	@cargo clippy
 
-# 
+rm-symlink:
+	@-rm -R /tmp/bms
+
+# required for the scheduler to access files from host to spawn new docker containers seamlessly on the host
 symlink:
 	ln -s "$(PWD)" /tmp/bms
 

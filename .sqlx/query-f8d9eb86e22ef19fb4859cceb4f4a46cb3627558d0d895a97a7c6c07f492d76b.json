@@ -10,10 +10,12 @@
             "name": "sub_job_status",
             "kind": {
               "Enum": [
+                "created",
                 "pending",
-                "running",
+                "processing",
                 "completed",
-                "failed"
+                "failed",
+                "canceled"
               ]
             }
           }

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::state::AppState;
+use crate::{state::AppState, sub_job_repository::SubJobStatus};
 use amqprs::{
     channel::{BasicAckArguments, Channel},
     consumer::AsyncConsumer,
@@ -40,7 +40,8 @@ impl StatusConsumer {
         match status_message.status {
             WorkerStatusDetails::Lifecycle(status) => {
                 self.state
-                    .worker_repo
+                    .repo
+                    .worker
                     .update_worker_status(
                         &status_message.worker_name,
                         &status.worker_status,
@@ -52,28 +53,41 @@ impl StatusConsumer {
                 match status.worker_status {
                     WorkerStatus::Online => {
                         self.state
-                            .topic_repo
+                            .repo
+                            .topic
                             .upsert_worker_topics(&status_message.worker_name, status.worker_topics)
                             .await?
                     }
                     WorkerStatus::Offline => {
                         self.state
-                            .topic_repo
+                            .repo
+                            .topic
                             .remove_worker_topics(&status_message.worker_name)
                             .await?
                     }
                 }
             }
             WorkerStatusDetails::Job(job_details) => {
-                let job_id = job_details.map(|j| j.job_id);
+                let job_id = job_details.as_ref().map(|j| j.job_id);
                 self.state
-                    .worker_repo
+                    .repo
+                    .worker
                     .update_worker_job(status_message.worker_name, job_id, status_message.timestamp)
                     .await?;
+
+                let sub_job_id = job_details.as_ref().map(|j| j.sub_job_id);
+                if let Some(sub_job_id) = sub_job_id {
+                    self.state
+                        .repo
+                        .sub_job
+                        .update_sub_job_status(&sub_job_id, SubJobStatus::Processing)
+                        .await?;
+                }
             }
             WorkerStatusDetails::Heartbeat => {
                 self.state
-                    .worker_repo
+                    .repo
+                    .worker
                     .update_worker_heartbeat(status_message.worker_name, status_message.timestamp)
                     .await?;
             }

@@ -1,0 +1,74 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, job_id, status as \"status!: SubJobStatus\", type as \"type!: SubJobType\", details, deadline_at\n            FROM sub_jobs\n            WHERE status = 'created' OR status = 'pending' OR status = 'processing'\n            ORDER BY created_at ASC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "job_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "status!: SubJobStatus",
+        "type_info": {
+          "Custom": {
+            "name": "sub_job_status",
+            "kind": {
+              "Enum": [
+                "created",
+                "pending",
+                "processing",
+                "completed",
+                "failed",
+                "canceled"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "type!: SubJobType",
+        "type_info": {
+          "Custom": {
+            "name": "sub_job_type",
+            "kind": {
+              "Enum": [
+                "combineddhp",
+                "scaling"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "details",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "deadline_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "cf8225183fc3a695e5af17c6dcf036a85f414b9c7be1b15237cc834700d47217"
+}

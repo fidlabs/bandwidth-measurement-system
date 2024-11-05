@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use color_eyre::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::{
@@ -94,6 +95,79 @@ impl ServiceRepository {
             RETURNING id, name, provider_type as "provider_type!: ProviderType", details, is_enabled
             "#,
             service_id
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(service)
+    }
+
+    pub async fn get_services_by_topic(&self, topic: &str) -> Result<Vec<Service>, sqlx::Error> {
+        let services = sqlx::query_as!(
+            Service,
+            r#"
+            SELECT id, name, provider_type as "provider_type!: ProviderType", details, is_enabled
+            FROM services as s
+            JOIN service_topics as st ON s.id = st.service_id
+            WHERE st.topic_id = (
+                SELECT id FROM topics WHERE name = $1
+            )
+            "#,
+            topic
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(services)
+    }
+
+    pub async fn set_descale_deadlines(
+        &self,
+        service_ids: &Vec<Uuid>,
+        deadline: DateTime<Utc>,
+    ) -> Result<(), sqlx::Error> {
+        let _ = sqlx::query!(
+            r#"
+            UPDATE services
+            SET descale_at = $2
+            WHERE id = ANY($1)
+            "#,
+            service_ids,
+            deadline
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn get_services_with_descale_deadline_reached(
+        &self,
+    ) -> Result<Vec<Service>, sqlx::Error> {
+        let services = sqlx::query_as!(
+            Service,
+            r#"
+            SELECT id, name, provider_type as "provider_type!: ProviderType", details, is_enabled
+            FROM services
+            WHERE descale_at <= NOW()
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(services)
+    }
+
+    pub async fn clear_descale_deadline(&self, service_id: &Uuid) -> Result<Service, sqlx::Error> {
+        let service = sqlx::query_as!(
+            Service,
+            r#"
+            UPDATE services
+            SET descale_at = NULL
+            WHERE id = $1
+            RETURNING id, name, provider_type as "provider_type!: ProviderType", details, is_enabled
+            "#,
+            service_id,
         )
         .fetch_one(&self.pool)
         .await?;

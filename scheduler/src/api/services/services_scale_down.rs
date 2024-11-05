@@ -29,7 +29,8 @@ pub async fn handle(
 ) -> Result<ApiResponse<ServiceScalerInfo>, ApiResponse<()>> {
     // Get service from db
     let service = state
-        .service_repo
+        .repo
+        .service
         .get_service_by_id(&payload.service_id)
         .await
         .inspect_err(|e| {

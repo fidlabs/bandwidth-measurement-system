@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO sub_jobs (id, job_id, status, type, details)\n            VALUES ($1, $2, $3, $4, $5)\n            RETURNING id, job_id, status as \"status!: SubJobStatus\", type as \"type!: SubJobType\", details\n            ",
+  "query": "\n            INSERT INTO sub_jobs (id, job_id, status, type, details)\n            VALUES ($1, $2, $3, $4, $5)\n            RETURNING id, job_id, status as \"status!: SubJobStatus\", type as \"type!: SubJobType\", details, deadline_at\n            ",
   "describe": {
     "columns": [
       {
@@ -21,10 +21,12 @@
             "name": "sub_job_status",
             "kind": {
               "Enum": [
+                "created",
                 "pending",
-                "running",
+                "processing",
                 "completed",
-                "failed"
+                "failed",
+                "canceled"
               ]
             }
           }
@@ -38,7 +40,8 @@
             "name": "sub_job_type",
             "kind": {
               "Enum": [
-                "combineddhp"
+                "combineddhp",
+                "scaling"
               ]
             }
           }
@@ -48,6 +51,11 @@
         "ordinal": 4,
         "name": "details",
         "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "deadline_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
@@ -59,10 +67,12 @@
             "name": "sub_job_status",
             "kind": {
               "Enum": [
+                "created",
                 "pending",
-                "running",
+                "processing",
                 "completed",
-                "failed"
+                "failed",
+                "canceled"
               ]
             }
           }
@@ -72,7 +82,8 @@
             "name": "sub_job_type",
             "kind": {
               "Enum": [
-                "combineddhp"
+                "combineddhp",
+                "scaling"
               ]
             }
           }
@@ -85,8 +96,9 @@
       false,
       false,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "edf91ca7cee26e9b21b546a46e11363ebdacb3ac3bab277eb435fa715e20cfa7"
+  "hash": "91039f4007f47184547ef7ea9e7aaefa783880ddf68f01b479f9a4857a2c5939"
 }

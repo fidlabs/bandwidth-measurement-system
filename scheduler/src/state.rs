@@ -1,17 +1,20 @@
 use std::sync::Arc;
 
-use rabbitmq::Publisher;
-use tokio::sync::Mutex;
-
 use crate::{repository::*, service_scaler::ServiceScalerRegistry};
 
 pub struct AppState {
-    pub job_queue: Arc<Mutex<Publisher>>,
-    pub data_repo: Arc<DataRepository>,
-    pub worker_repo: Arc<WorkerRepository>,
-    pub job_repo: Arc<JobRepository>,
-    pub topic_repo: Arc<TopicRepository>,
-    pub sub_job_repo: Arc<SubJobRepository>,
-    pub service_repo: Arc<ServiceRepository>,
+    pub repo: Arc<Repositories>,
     pub service_scaler_registry: Arc<ServiceScalerRegistry>,
+}
+
+impl AppState {
+    pub fn new(
+        repo: Arc<Repositories>,
+        service_scaler_registry: Arc<ServiceScalerRegistry>,
+    ) -> Self {
+        Self {
+            repo,
+            service_scaler_registry,
+        }
+    }
 }

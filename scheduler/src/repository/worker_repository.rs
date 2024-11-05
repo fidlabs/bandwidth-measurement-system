@@ -96,4 +96,54 @@ impl WorkerRepository {
 
         Ok(())
     }
+
+    pub async fn get_workers_online_with_topic(
+        &self,
+        topic: &String,
+    ) -> Result<Vec<String>, sqlx::Error> {
+        let workers = sqlx::query!(
+            r#"
+            SELECT w.worker_name
+            FROM workers as w
+            JOIN worker_topics as wt ON w.worker_name = wt.worker_name
+            WHERE w.status = 'online' AND wt.topic_id = (
+                SELECT id FROM topics WHERE name = $1
+            )
+            "#,
+            topic,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(workers.into_iter().map(|w| w.worker_name).collect())
+    }
+
+    pub async fn get_inactive_online_workers(&self) -> Result<Vec<String>, sqlx::Error> {
+        let workers = sqlx::query!(
+            r#"
+            SELECT worker_name
+            FROM workers
+            WHERE status = 'online' AND last_seen < NOW() - INTERVAL '1 minute'
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(workers.into_iter().map(|w| w.worker_name).collect())
+    }
+
+    pub async fn set_worker_offline(&self, worker_name: &String) -> Result<(), sqlx::Error> {
+        sqlx::query!(
+            r#"
+            UPDATE workers
+            SET status = 'offline'
+            WHERE worker_name = $1
+            "#,
+            worker_name
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
 }

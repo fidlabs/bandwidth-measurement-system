@@ -15,7 +15,7 @@ pub struct Config {
     pub local_mode: String,
 }
 impl Config {
-    pub fn new_from_env() -> Result<Self, anyhow::Error> {
+    pub fn new_from_env() -> Result<Self> {
         // Initialize database connection pool & run migrations
         let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
             let json_params = env::var("DB_CONNECT_PARAMS_JSON")

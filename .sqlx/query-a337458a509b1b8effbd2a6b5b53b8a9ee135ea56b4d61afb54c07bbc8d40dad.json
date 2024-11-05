@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT worker_name\n            FROM workers\n            WHERE status = 'online' AND last_seen < NOW() - INTERVAL '1 minute'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "worker_name",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a337458a509b1b8effbd2a6b5b53b8a9ee135ea56b4d61afb54c07bbc8d40dad"
+}

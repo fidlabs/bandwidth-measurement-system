@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, worker_name, is_success, download, ping, head\n            FROM worker_data\n            WHERE sub_job_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "worker_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_success",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "download",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "ping",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "head",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "8710659c67789d1c7f2d7608d366d95afaace6c540d5754d270fece5ba32d5c0"
+}

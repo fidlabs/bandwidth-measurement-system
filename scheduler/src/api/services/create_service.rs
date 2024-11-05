@@ -57,7 +57,8 @@ pub async fn handle(
 
     // Create the service
     let service = state
-        .service_repo
+        .repo
+        .service
         .create_service(&payload.service_name, payload.provider_type, &details)
         .await
         .inspect_err(|e| {
@@ -67,7 +68,8 @@ pub async fn handle(
 
     // Create the service topics
     state
-        .topic_repo
+        .repo
+        .topic
         .upsert_service_topics(&service.id, &payload.topics)
         .await
         .inspect_err(|e| {

@@ -58,7 +58,9 @@ services:
     # run with cargo watch to auto-reload without restarting container
     command: cargo watch --poll -x 'run --bin scheduler'
     environment:
-      - RUST_LOG=debug
+      # - LOG_LEVEL=info
+      # - RUST_LOG=trace
+      - LOG_LEVEL=trace
       - DATABASE_URL=postgres://pguser:pgpassword@postgres/bms
       - RABBITMQ_ENDPOINT=amqp://rabbitmq
       - RABBITMQ_PORT=5672
@@ -80,34 +82,7 @@ services:
       - rabbitmq
       - postgres
 
-  worker_static:
-    build:
-      context: .
-      dockerfile: ./Dockerfile.local
-    working_dir: /app
-    stop_grace_period: 60s # matched to max download timeout in worker
-    ## command info
-    # run with cargo watch to auto-reload without restarting container
-    command: cargo watch --poll -x "run --bin worker"
-    environment:
-      - WORKER_NAME=worker_static
-      - WORKER_TOPICS=all,usa
-      - RABBITMQ_ENDPOINT=amqp://rabbitmq
-      - RABBITMQ_PORT=5672
-      - RABBITMQ_USERNAME=guest
-      - RABBITMQ_PASSWORD=guest
-    networks:
-      - bms-network
-    volumes:
-      - .:/app                          # bind current directory to /app
-      - /dev/null:/app/.env             # do not use .env file
-      - cargo-cache:/usr/local/cargo    # own cargo cache
-      - target:/app/target              # own target directory
-    depends_on:
-      - rabbitmq
-      - postgres
-
-  worker_scaled:
+  worker_eu_pl:
     build:
       context: .
       dockerfile: ./Dockerfile.local
@@ -119,7 +94,65 @@ services:
     # exec is required to capture SIGTERM signal
     command: sh -c 'export WORKER_NAME=$(hostname) && exec cargo watch --poll -x "run --bin worker"'
     environment:
-      - WORKER_TOPICS=all,europe,poland
+      - WORKER_TOPICS=all,europe,poland,rzeszow
+      - RABBITMQ_ENDPOINT=amqp://rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=guest
+      - RABBITMQ_PASSWORD=guest
+    networks:
+      - bms-network
+    volumes:
+      - /tmp/bms:/app                   # bind symlink to current directory to /app, required to bypass path conflict between docker and host
+      - /dev/null:/app/.env             # do not use .env file
+      - cargo-cache:/usr/local/cargo    # own cargo cache
+      - target:/app/target              # own target directory
+    scale: 0 # number of worker instances, will be scaled by scheduler
+    depends_on:
+      - rabbitmq
+      - postgres
+
+  worker_usa_la:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.local
+    working_dir: /app
+    stop_grace_period: 60s # matched to max download timeout in worker
+    ## command info
+    # export to set unique worker name 
+    # run with cargo watch to auto-reload without restarting container
+    # exec is required to capture SIGTERM signal
+    command: sh -c 'export WORKER_NAME=$(hostname) && exec cargo watch --poll -x "run --bin worker"'
+    environment:
+      - WORKER_TOPICS=all,usa,california,los_angeles
+      - RABBITMQ_ENDPOINT=amqp://rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=guest
+      - RABBITMQ_PASSWORD=guest
+    networks:
+      - bms-network
+    volumes:
+      - /tmp/bms:/app                   # bind symlink to current directory to /app, required to bypass path conflict between docker and host
+      - /dev/null:/app/.env             # do not use .env file
+      - cargo-cache:/usr/local/cargo    # own cargo cache
+      - target:/app/target              # own target directory
+    scale: 0 # number of worker instances, will be scaled by scheduler
+    depends_on:
+      - rabbitmq
+      - postgres
+
+  worker_eu_es:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.local
+    working_dir: /app
+    stop_grace_period: 60s # matched to max download timeout in worker
+    ## command info
+    # export to set unique worker name 
+    # run with cargo watch to auto-reload without restarting container
+    # exec is required to capture SIGTERM signal
+    command: sh -c 'export WORKER_NAME=$(hostname) && exec cargo watch --poll -x "run --bin worker"'
+    environment:
+      - WORKER_TOPICS=all,europe,spain,alicante
       - RABBITMQ_ENDPOINT=amqp://rabbitmq
       - RABBITMQ_PORT=5672
       - RABBITMQ_USERNAME=guest
