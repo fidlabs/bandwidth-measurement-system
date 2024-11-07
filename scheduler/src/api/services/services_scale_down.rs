@@ -17,8 +17,7 @@ pub struct ServicesScaleDownInput {
     pub amount: u64,
 }
 
-/// POST /services/scale/down
-/// Scale down a service
+/// Scale down a service by specified amount
 #[debug_handler]
 pub async fn handle(
     State(state): State<Arc<AppState>>,
@@ -45,7 +44,7 @@ pub async fn handle(
         .ok_or(bad_request("ServiceScaler not found"))?;
 
     service_scaler
-        .scale_down(&service, payload.amount)
+        .scale_down(&service, payload.amount.try_into().unwrap_or(0))
         .await
         .inspect_err(|e| {
             error!("ServiceScaler scale down error: {:?}", e);
@@ -61,6 +60,21 @@ pub async fn handle(
             error!("ServiceScaler get info error: {:?}", e);
         })
         .map_err(|e| internal_server_error(format!("ServiceScaler get info: {:?}", e)))?;
+
+    // Clear descale deadline if desired count is down to 0
+    if let Some(desired_count) = service_info.desired_count {
+        if desired_count == 0 {
+            state
+                .repo
+                .service
+                .clear_descale_deadline(&payload.service_id)
+                .await
+                .inspect_err(|e| {
+                    error!("ServiceRepository clear descale at error: {:?}", e);
+                })
+                .map_err(|_| internal_server_error("Failed to clear descale at for the service"))?;
+        }
+    }
 
     debug!(
         "Successfully got service info name: {}, instances: {}",

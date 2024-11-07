@@ -79,9 +79,9 @@ impl ServiceScalerInfo {
 
 #[async_trait]
 pub trait ServiceScaler: Send + Sync {
-    async fn scale_up(&self, service: &Service, amount: u64) -> Result<(), ServiceScalerError>;
+    async fn scale_up(&self, service: &Service, amount: i32) -> Result<(), ServiceScalerError>;
 
-    async fn scale_down(&self, service: &Service, amount: u64) -> Result<(), ServiceScalerError>;
+    async fn scale_down(&self, service: &Service, amount: i32) -> Result<(), ServiceScalerError>;
 
     async fn get_info(&self, service: &Service) -> Result<ServiceScalerInfo, ServiceScalerError>;
 }

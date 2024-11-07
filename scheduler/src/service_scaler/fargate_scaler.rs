@@ -12,21 +12,40 @@ pub struct FargateScaler {}
 
 #[async_trait]
 impl ServiceScaler for FargateScaler {
-    async fn scale_up(&self, service: &Service, amount: u64) -> Result<(), ServiceScalerError> {
+    async fn scale_up(&self, service: &Service, amount: i32) -> Result<(), ServiceScalerError> {
         let service_info = self.get_service_info(service).await?;
-        let new_count = service_info.desired_count.unwrap() + amount as i32;
+        let new_count = service_info.desired_count.unwrap() + amount;
+
+        if service_info.desired_count.unwrap_or(0) == new_count {
+            return Ok(());
+        }
+
         self.update_service(service, new_count).await?;
+
         Ok(())
     }
 
-    async fn scale_down(&self, service: &Service, amount: u64) -> Result<(), ServiceScalerError> {
+    async fn scale_down(&self, service: &Service, amount: i32) -> Result<(), ServiceScalerError> {
         let service_info = self.get_service_info(service).await?;
         let new_count = service_info
             .desired_count
             .unwrap()
-            .saturating_sub(amount as i32);
+            .saturating_sub(amount)
+            .max(0);
+
+        tracing::error!(
+            "desired_count: {}, new_count: {}, amount: {}",
+            service_info.desired_count.unwrap_or(0),
+            new_count,
+            amount
+        );
+
+        if service_info.desired_count.unwrap_or(0) == new_count {
+            return Ok(());
+        }
 
         self.update_service(service, new_count).await?;
+
         Ok(())
     }
 

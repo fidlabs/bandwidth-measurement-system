@@ -7,7 +7,7 @@ use sqlx::{
 };
 use uuid::Uuid;
 
-#[derive(Debug, Type, Eq, Hash, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Type, Eq, Hash, PartialEq, Deserialize, Serialize, Clone)]
 #[sqlx(type_name = "provider_type", rename_all = "snake_case")]
 pub enum ProviderType {
     DockerLocal,
@@ -21,6 +21,31 @@ pub struct Service {
     pub provider_type: ProviderType,
     pub details: serde_json::Value,
     pub is_enabled: bool,
+    pub descale_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, FromRow, Serialize)]
+pub struct ServiceWithTopics {
+    pub id: Uuid,
+    pub name: String,
+    pub provider_type: ProviderType,
+    pub details: serde_json::Value,
+    pub is_enabled: bool,
+    pub descale_at: Option<DateTime<Utc>>,
+    pub topics: Vec<String>,
+}
+
+impl ServiceWithTopics {
+    pub fn to_service(&self) -> Service {
+        Service {
+            id: self.id,
+            name: self.name.clone(),
+            provider_type: self.provider_type.clone(),
+            details: self.details.clone(),
+            is_enabled: self.is_enabled,
+            descale_at: self.descale_at,
+        }
+    }
 }
 
 pub struct ServiceRepository {
@@ -36,8 +61,32 @@ impl ServiceRepository {
         let services = sqlx::query_as!(
             Service,
             r#"
-            SELECT id, name, provider_type as "provider_type!: ProviderType", details, is_enabled
+            SELECT id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, descale_at
             FROM services
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(services)
+    }
+
+    pub async fn get_services_with_topics(&self) -> Result<Vec<ServiceWithTopics>, sqlx::Error> {
+        let services = sqlx::query_as!(
+            ServiceWithTopics,
+            r#"
+            SELECT 
+                s.id, 
+                s.name, 
+                s.provider_type as "provider_type!: ProviderType", 
+                s.details, 
+                s.is_enabled, 
+                s.descale_at, 
+                COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as "topics!: Vec<String>"
+            FROM services as s
+            LEFT JOIN service_topics as st ON s.id = st.service_id
+            LEFT JOIN topics as t ON st.topic_id = t.id
+            GROUP BY s.id
             "#
         )
         .fetch_all(&self.pool)
@@ -57,7 +106,7 @@ impl ServiceRepository {
             r#"
             INSERT INTO services (name, provider_type, details, is_enabled)
             VALUES ($1, $2, $3, $4)
-            RETURNING id, name, provider_type as "provider_type!: ProviderType", details, is_enabled
+            RETURNING id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, descale_at
             "#,
             name,
             provider_type as ProviderType,
@@ -74,7 +123,7 @@ impl ServiceRepository {
         let service = sqlx::query_as!(
             Service,
             r#"
-            SELECT id, name, provider_type as "provider_type!: ProviderType", details, is_enabled
+            SELECT id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, descale_at
             FROM services
             WHERE id = $1
             "#,
@@ -92,7 +141,7 @@ impl ServiceRepository {
             r#"
             DELETE FROM services
             WHERE id = $1
-            RETURNING id, name, provider_type as "provider_type!: ProviderType", details, is_enabled
+            RETURNING id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, descale_at
             "#,
             service_id
         )
@@ -102,16 +151,19 @@ impl ServiceRepository {
         Ok(service)
     }
 
-    pub async fn get_services_by_topic(&self, topic: &str) -> Result<Vec<Service>, sqlx::Error> {
+    pub async fn get_services_enabled_by_topic(
+        &self,
+        topic: &str,
+    ) -> Result<Vec<Service>, sqlx::Error> {
         let services = sqlx::query_as!(
             Service,
             r#"
-            SELECT id, name, provider_type as "provider_type!: ProviderType", details, is_enabled
+            SELECT id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, descale_at
             FROM services as s
             JOIN service_topics as st ON s.id = st.service_id
             WHERE st.topic_id = (
                 SELECT id FROM topics WHERE name = $1
-            )
+            ) AND s.is_enabled = TRUE
             "#,
             topic
         )
@@ -147,7 +199,7 @@ impl ServiceRepository {
         let services = sqlx::query_as!(
             Service,
             r#"
-            SELECT id, name, provider_type as "provider_type!: ProviderType", details, is_enabled
+            SELECT id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, descale_at
             FROM services
             WHERE descale_at <= NOW()
             "#,
@@ -165,9 +217,31 @@ impl ServiceRepository {
             UPDATE services
             SET descale_at = NULL
             WHERE id = $1
-            RETURNING id, name, provider_type as "provider_type!: ProviderType", details, is_enabled
+            RETURNING id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, descale_at
             "#,
             service_id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(service)
+    }
+
+    pub async fn update_service_set_enabled(
+        &self,
+        service_id: &Uuid,
+        is_enabled: &bool,
+    ) -> Result<Service, sqlx::Error> {
+        let service = sqlx::query_as!(
+            Service,
+            r#"
+            UPDATE services
+            SET is_enabled = $2
+            WHERE id = $1
+            RETURNING id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, descale_at
+            "#,
+            service_id,
+            is_enabled
         )
         .fetch_one(&self.pool)
         .await?;

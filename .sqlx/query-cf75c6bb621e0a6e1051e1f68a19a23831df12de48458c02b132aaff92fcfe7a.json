@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE services\n            SET descale_at = NULL\n            WHERE id = $1\n            RETURNING id, name, provider_type as \"provider_type!: ProviderType\", details, is_enabled, descale_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider_type!: ProviderType",
+        "type_info": {
+          "Custom": {
+            "name": "provider_type",
+            "kind": {
+              "Enum": [
+                "docker_local",
+                "aws_fargate"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "details",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "descale_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "cf75c6bb621e0a6e1051e1f68a19a23831df12de48458c02b132aaff92fcfe7a"
+}

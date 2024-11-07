@@ -71,8 +71,8 @@ async fn process_status_created(
             url: job.url.clone(),
             start_time,
             download_start_time,
-            start_range: job.details.start_range,
-            end_range: job.details.end_range,
+            start_range: job.details.start_range as u64,
+            end_range: job.details.end_range as u64,
         },
     };
 

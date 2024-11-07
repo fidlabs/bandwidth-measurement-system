@@ -17,8 +17,7 @@ pub struct ServicesScaleUpInput {
     pub amount: u64,
 }
 
-/// GET /services/scale/up
-/// Scale up a service
+/// Scale up a service by specified amount
 #[debug_handler]
 pub async fn handle(
     State(state): State<Arc<AppState>>,
@@ -46,7 +45,7 @@ pub async fn handle(
 
     // Scale up the service
     service_scaler
-        .scale_up(&service, payload.amount)
+        .scale_up(&service, payload.amount.try_into().unwrap_or(0))
         .await
         .inspect_err(|e| {
             error!("ServiceScaler scale up error: {:?}", e);

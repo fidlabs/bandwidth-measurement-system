@@ -35,6 +35,8 @@ pub async fn sub_job_handler(
 
         debug!("Checking for new sub jobs");
 
+        // TODO: Job picking is blocking, will not go with NON-overlaping jobs
+
         let sub_job = match repo.sub_job.get_first_unfinished_sub_job().await {
             Ok(sub_job) => sub_job,
             Err(e) => {

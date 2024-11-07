@@ -11,24 +11,37 @@ pub struct DockerScaler;
 
 #[async_trait]
 impl ServiceScaler for DockerScaler {
-    async fn scale_up(&self, service: &Service, amount: u64) -> Result<(), ServiceScalerError> {
+    async fn scale_up(&self, service: &Service, amount: i32) -> Result<(), ServiceScalerError> {
         let current_count = self.get_instance_count(&service.name)?;
-        let new_count = current_count + amount;
+        let new_count = current_count + amount.try_into().unwrap_or(0);
+
+        if current_count == new_count {
+            return Ok(());
+        }
 
         self.scale_service(&service.name, new_count)?;
+
         Ok(())
     }
 
-    async fn scale_down(&self, service: &Service, amount: u64) -> Result<(), ServiceScalerError> {
+    async fn scale_down(&self, service: &Service, amount: i32) -> Result<(), ServiceScalerError> {
         let current_count = self.get_instance_count(&service.name)?;
-        let new_count = current_count.saturating_sub(amount);
+        let new_count = current_count
+            .saturating_sub(amount.try_into().unwrap_or(u64::MAX))
+            .max(0);
+
+        if current_count == new_count {
+            return Ok(());
+        }
 
         self.scale_service(&service.name, new_count)?;
+
         Ok(())
     }
 
     async fn get_info(&self, service: &Service) -> Result<ServiceScalerInfo, ServiceScalerError> {
         let instances = self.get_instance_count(&service.name)?;
+
         Ok(ServiceScalerInfo::docker(service.name.clone(), instances))
     }
 }

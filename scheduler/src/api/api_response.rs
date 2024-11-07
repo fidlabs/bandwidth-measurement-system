@@ -1,4 +1,4 @@
-use axum::extract::rejection::{JsonRejection, QueryRejection};
+use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
 use serde::Serialize;
@@ -26,6 +26,14 @@ impl From<JsonRejection> for ApiResponse<ErrorResponse> {
 
 impl From<QueryRejection> for ApiResponse<ErrorResponse> {
     fn from(rejection: QueryRejection) -> ApiResponse<ErrorResponse> {
+        ApiResponse::BadRequest(Json(ErrorResponse {
+            error: rejection.body_text(),
+        }))
+    }
+}
+
+impl From<PathRejection> for ApiResponse<ErrorResponse> {
+    fn from(rejection: PathRejection) -> ApiResponse<ErrorResponse> {
         ApiResponse::BadRequest(Json(ErrorResponse {
             error: rejection.body_text(),
         }))
