@@ -26,9 +26,7 @@ impl ServiceScaler for DockerScaler {
 
     async fn scale_down(&self, service: &Service, amount: i32) -> Result<(), ServiceScalerError> {
         let current_count = self.get_instance_count(&service.name)?;
-        let new_count = current_count
-            .saturating_sub(amount.try_into().unwrap_or(u64::MAX))
-            .max(0);
+        let new_count = current_count.saturating_sub(amount.try_into().unwrap_or(u64::MAX));
 
         if current_count == new_count {
             return Ok(());
