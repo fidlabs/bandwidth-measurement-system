@@ -3,4 +3,6 @@ pub mod delete_service;
 pub mod get_services;
 pub mod services_info;
 pub mod services_scale_down;
+pub mod services_scale_down_all;
 pub mod services_scale_up;
+pub mod update_service;

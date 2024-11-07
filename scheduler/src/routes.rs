@@ -4,14 +4,14 @@ use axum::{
     extract::Request,
     middleware::{self, Next},
     response::Response,
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
     Router,
 };
 
 use crate::{
     api::{
         api_response::{unauthorized, ApiResponse},
-        create_job, get_data, healthcheck, services,
+        healthcheck, jobs, services,
     },
     config::CONFIG,
     state::AppState,
@@ -33,12 +33,15 @@ async fn auth(req: Request, next: Next) -> Result<Response, ApiResponse<()>> {
 pub fn create_routes() -> Router<Arc<AppState>> {
     let routes = Router::new()
         .route("/healthcheck", get(healthcheck::handle))
-        .route("/data", get(get_data::handle))
-        .route("/job", post(create_job::handle));
+        .route("/jobs", post(jobs::create_job::handle))
+        .route("/jobs", get(jobs::get_jobs::handle))
+        .route("/jobs/:job_id", get(jobs::get_job::handle))
+        .route("/jobs/:job_id", delete(jobs::cancel_job::handle));
 
     let auth_routes = Router::new()
         .route("/services", get(services::get_services::handle))
         .route("/services", post(services::create_service::handle))
+        .route("/services", put(services::update_service::handle))
         .route("/services", delete(services::delete_service::handle))
         .route("/services/scale/info", get(services::services_info::handle))
         .route(
@@ -48,6 +51,10 @@ pub fn create_routes() -> Router<Arc<AppState>> {
         .route(
             "/services/scale/down",
             post(services::services_scale_down::handle),
+        )
+        .route(
+            "/services/scale/down/all",
+            post(services::services_scale_down_all::handle),
         )
         .layer(middleware::from_fn(auth));
 

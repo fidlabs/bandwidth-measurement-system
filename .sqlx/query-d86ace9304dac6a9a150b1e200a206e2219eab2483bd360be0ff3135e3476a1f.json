@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE sub_jobs\n            SET status = $1\n            WHERE id = $2\n            ",
+  "query": "\n            UPDATE sub_jobs\n            SET status = $1\n            WHERE job_id = $2\n            ",
   "describe": {
     "columns": [],
     "parameters": {
@@ -25,5 +25,5 @@
     },
     "nullable": []
   },
-  "hash": "f8d9eb86e22ef19fb4859cceb4f4a46cb3627558d0d895a97a7c6c07f492d76b"
+  "hash": "d86ace9304dac6a9a150b1e200a206e2219eab2483bd360be0ff3135e3476a1f"
 }

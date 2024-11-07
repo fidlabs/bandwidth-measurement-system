@@ -1,13 +1,14 @@
 use chrono::{DateTime, Utc};
 use color_eyre::Result;
+use serde::{Deserialize, Serialize};
 use sqlx::{
     prelude::{FromRow, Type},
     PgPool,
 };
 use uuid::Uuid;
 
-#[derive(Debug, Type)]
-#[sqlx(type_name = "sub_job_status", rename_all = "lowercase")]
+#[derive(Deserialize, Serialize, Debug, Type)]
+#[sqlx(type_name = "sub_job_status")]
 pub enum SubJobStatus {
     Created,
     Pending,
@@ -17,8 +18,8 @@ pub enum SubJobStatus {
     Canceled,
 }
 
-#[derive(Debug, Type)]
-#[sqlx(type_name = "sub_job_type", rename_all = "lowercase")]
+#[derive(Deserialize, Serialize, Debug, Type)]
+#[sqlx(type_name = "sub_job_type")]
 pub enum SubJobType {
     CombinedDHP,
     Scaling,
@@ -29,7 +30,7 @@ pub struct SubJobRepository {
     pool: PgPool,
 }
 
-#[derive(FromRow, Debug)]
+#[derive(Serialize, Deserialize, FromRow, Debug, Type)]
 #[allow(dead_code)]
 pub struct SubJob {
     pub id: Uuid,
@@ -38,6 +39,16 @@ pub struct SubJob {
     pub r#type: SubJobType,
     pub details: serde_json::Value,
     pub deadline_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Type)]
+pub struct WorkerData {
+    id: Uuid,
+    worker_name: String,
+    is_success: Option<bool>,
+    download: serde_json::Value,
+    ping: serde_json::Value,
+    head: serde_json::Value,
 }
 
 impl SubJobRepository {
@@ -85,6 +96,26 @@ impl SubJobRepository {
             "#,
             status as SubJobStatus,
             sub_job_id,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn update_sub_jobs_status_by_job_id(
+        &self,
+        job_id: &Uuid,
+        status: SubJobStatus,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query!(
+            r#"
+            UPDATE sub_jobs
+            SET status = $1
+            WHERE job_id = $2
+            "#,
+            status as SubJobStatus,
+            job_id,
         )
         .execute(&self.pool)
         .await?;
@@ -145,7 +176,7 @@ impl SubJobRepository {
             r#"
             SELECT COUNT(*) as count
             FROM sub_jobs
-            WHERE job_id = $1 AND type = $2 AND status IN ('created', 'pending', 'processing')
+            WHERE job_id = $1 AND type = $2 AND status IN ('Created', 'Pending', 'Processing')
             "#,
             job_id,
             sub_job_type as SubJobType,
@@ -162,7 +193,7 @@ impl SubJobRepository {
             r#"
             SELECT id, job_id, status as "status!: SubJobStatus", type as "type!: SubJobType", details, deadline_at
             FROM sub_jobs
-            WHERE status = 'created' OR status = 'pending' OR status = 'processing'
+            WHERE status = 'Created' OR status = 'Pending' OR status = 'Processing' 
             ORDER BY created_at ASC
             LIMIT 1
             "#,

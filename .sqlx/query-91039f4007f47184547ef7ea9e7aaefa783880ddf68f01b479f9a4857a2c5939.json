@@ -21,12 +21,12 @@
             "name": "sub_job_status",
             "kind": {
               "Enum": [
-                "created",
-                "pending",
-                "processing",
-                "completed",
-                "failed",
-                "canceled"
+                "Created",
+                "Pending",
+                "Processing",
+                "Completed",
+                "Failed",
+                "Canceled"
               ]
             }
           }
@@ -40,8 +40,8 @@
             "name": "sub_job_type",
             "kind": {
               "Enum": [
-                "combineddhp",
-                "scaling"
+                "CombinedDHP",
+                "Scaling"
               ]
             }
           }
@@ -67,12 +67,12 @@
             "name": "sub_job_status",
             "kind": {
               "Enum": [
-                "created",
-                "pending",
-                "processing",
-                "completed",
-                "failed",
-                "canceled"
+                "Created",
+                "Pending",
+                "Processing",
+                "Completed",
+                "Failed",
+                "Canceled"
               ]
             }
           }
@@ -82,8 +82,8 @@
             "name": "sub_job_type",
             "kind": {
               "Enum": [
-                "combineddhp",
-                "scaling"
+                "CombinedDHP",
+                "Scaling"
               ]
             }
           }

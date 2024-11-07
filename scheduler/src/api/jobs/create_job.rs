@@ -32,7 +32,6 @@ pub struct JobResponse {
     pub sub_jobs: Vec<Uuid>,
 }
 
-/// POST /job
 /// Create a new job to be processed by the worker
 #[debug_handler]
 pub async fn handle(

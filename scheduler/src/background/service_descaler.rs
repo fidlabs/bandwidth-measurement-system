@@ -35,7 +35,7 @@ pub async fn service_descaler_handler(
                 }
             };
 
-            if let Err(e) = scaler.scale_down(&service, u64::MAX).await {
+            if let Err(e) = scaler.scale_down(&service, i32::MAX).await {
                 error!("ServiceScalerError: {:?}", e);
                 continue;
             };

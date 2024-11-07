@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Load .env
     dotenvy::dotenv()
-        .inspect_err(|_| eprintln!("Failed to read .env file, ignoring."))
+        .inspect_err(|_| info!("Failed to read .env file, ignoring."))
         .ok();
 
     // Initialize logging
@@ -54,9 +54,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )
         .init();
 
+    info!("Connecting to PostgreSQL...");
     let pool = PgPool::connect(&CONFIG.db_url).await?;
+    info!("Successfully connected to PostgreSQL, Running database migrations...");
     MIGRATOR.run(&pool).await?;
+    info!("Successfully ran database migrations");
 
+    info!("Connecting to RabbitMQ...");
     // Initialize RabbitMQ connection
     let rabbit_connection = rabbitmq::get_connection().await?;
     info!("Successfully connected to RabbitMQ");

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT COUNT(*) as count\n            FROM sub_jobs\n            WHERE job_id = $1 AND type = $2 AND status IN ('created', 'pending', 'processing')\n            ",
+  "query": "\n            SELECT COUNT(*) as count\n            FROM sub_jobs\n            WHERE job_id = $1 AND type = $2 AND status IN ('Created', 'Pending', 'Processing')\n            ",
   "describe": {
     "columns": [
       {
@@ -17,8 +17,8 @@
             "name": "sub_job_type",
             "kind": {
               "Enum": [
-                "combineddhp",
-                "scaling"
+                "CombinedDHP",
+                "Scaling"
               ]
             }
           }
@@ -29,5 +29,5 @@
       null
     ]
   },
-  "hash": "77b18ec95aaf1641f115cdf36a0573e1129df374a5502f208e711920ddaa1231"
+  "hash": "b441487b0777c27574dc804f750df15cd2a5038aaf5b15382469cd6efa10bab9"
 }

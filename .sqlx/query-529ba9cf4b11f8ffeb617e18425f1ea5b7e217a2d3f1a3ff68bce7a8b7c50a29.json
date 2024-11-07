@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \n                s.id, \n                s.name, \n                s.provider_type as \"provider_type!: ProviderType\", \n                s.details, \n                s.is_enabled, \n                s.descale_at, \n                COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as \"topics!: Vec<String>\"\n            FROM services as s\n            LEFT JOIN service_topics as st ON s.id = st.service_id\n            LEFT JOIN topics as t ON st.topic_id = t.id\n            GROUP BY s.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider_type!: ProviderType",
+        "type_info": {
+          "Custom": {
+            "name": "provider_type",
+            "kind": {
+              "Enum": [
+                "docker_local",
+                "aws_fargate"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "details",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "descale_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "topics!: Vec<String>",
+        "type_info": "VarcharArray"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "529ba9cf4b11f8ffeb617e18425f1ea5b7e217a2d3f1a3ff68bce7a8b7c50a29"
+}

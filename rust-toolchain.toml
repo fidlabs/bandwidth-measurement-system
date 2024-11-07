@@ -1,0 +1,6 @@
+[toolchain]
+channel = "stable"
+components = [
+	"cargo",
+	"clippy",
+]

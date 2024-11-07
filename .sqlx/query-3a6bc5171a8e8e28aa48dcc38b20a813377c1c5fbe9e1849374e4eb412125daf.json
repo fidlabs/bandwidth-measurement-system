@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE services\n            SET descale_at = NULL\n            WHERE id = $1\n            RETURNING id, name, provider_type as \"provider_type!: ProviderType\", details, is_enabled\n            ",
+  "query": "\n            SELECT id, name, provider_type as \"provider_type!: ProviderType\", details, is_enabled, descale_at\n            FROM services\n            WHERE descale_at <= NOW()\n            ",
   "describe": {
     "columns": [
       {
@@ -37,20 +37,24 @@
         "ordinal": 4,
         "name": "is_enabled",
         "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "descale_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
-      "Left": [
-        "Uuid"
-      ]
+      "Left": []
     },
     "nullable": [
       false,
       false,
       false,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "eb22f533276d3ba2a25dc7c602a79401e19e17601a2499ef1bf75c5a274f4feb"
+  "hash": "3a6bc5171a8e8e28aa48dcc38b20a813377c1c5fbe9e1849374e4eb412125daf"
 }

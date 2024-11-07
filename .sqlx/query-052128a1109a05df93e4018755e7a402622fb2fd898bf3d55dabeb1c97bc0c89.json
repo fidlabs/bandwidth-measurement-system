@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, name, provider_type as \"provider_type!: ProviderType\", details, is_enabled\n            FROM services\n            ",
+  "query": "\n            SELECT id, name, provider_type as \"provider_type!: ProviderType\", details, is_enabled, descale_at\n            FROM services\n            WHERE id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -37,18 +37,26 @@
         "ordinal": 4,
         "name": "is_enabled",
         "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "descale_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Uuid"
+      ]
     },
     "nullable": [
       false,
       false,
       false,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "d724ea366c1e6191c6ccebda8acca684bbdb1aec35ae775af5d9c0c5c8977b5a"
+  "hash": "052128a1109a05df93e4018755e7a402622fb2fd898bf3d55dabeb1c97bc0c89"
 }

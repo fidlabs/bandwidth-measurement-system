@@ -14,7 +14,8 @@ use crate::{
 
 use super::sub_job_handler::SubJobHandlerError;
 
-const SERVICE_DEADLINE_SEC: u64 = 3600; // 1 hour
+const SERVICE_DESCALE_AT_DEADLINE_SEC: u64 = 1800; // 0.5h
+const SCALING_SUB_JOB_DEADLINE_SEC: u64 = SERVICE_DESCALE_AT_DEADLINE_SEC - 300; // 5 minutes before service deadline
 const MAX_JOB_WORKERS: usize = 10;
 
 pub(super) async fn process_scaling(
@@ -74,7 +75,7 @@ async fn process_scaling_created(
         .map_err(|e| SubJobHandlerError::Skip(e.to_string()))?;
 
     // Extend the descale_at deadline for all services
-    let descale_at = Utc::now() + Duration::from_secs(SERVICE_DEADLINE_SEC);
+    let descale_at = Utc::now() + Duration::from_secs(SERVICE_DESCALE_AT_DEADLINE_SEC);
     repo.service
         .set_descale_deadlines(&services.iter().map(|s| s.id).collect(), descale_at)
         .await
@@ -92,7 +93,7 @@ async fn process_scaling_created(
 
     // Do not scale if workers are already online
     // Set the sub job status to canceled
-    if workers_online.len() >= service_count {
+    if workers_online.len() >= workers_count as usize {
         repo.sub_job
             .update_sub_job_status(&sub_job.id, SubJobStatus::Canceled)
             .await
@@ -113,14 +114,15 @@ async fn process_scaling_created(
             .ok_or(SubJobHandlerError::FailedJob("No scaler found".to_string()))?;
 
         scaler
-            .scale_up(&service, scale_each_by as u64)
+            .scale_up(&service, scale_each_by.try_into().unwrap_or(0))
             .await
             .map_err(|e| SubJobHandlerError::Skip(e.to_str()))?;
     }
 
     // Update sub job status to processing
+    let deadline_at = Utc::now() + Duration::from_secs(SCALING_SUB_JOB_DEADLINE_SEC);
     repo.sub_job
-        .update_sub_job_status(&sub_job.id, SubJobStatus::Processing)
+        .update_sub_job_status_and_deadline(&sub_job.id, SubJobStatus::Processing, deadline_at)
         .await
         .map_err(|e| SubJobHandlerError::Skip(e.to_string()))?;
 
@@ -142,6 +144,7 @@ async fn process_scaling_processing(
     sub_job: &SubJob,
 ) -> Result<(), SubJobHandlerError> {
     info!("Processing scaling processing type sub job");
+    check_deadline(sub_job)?;
 
     let topic = get_topic(sub_job)?;
     let services = get_services(repo.clone(), &topic).await?;
@@ -187,7 +190,7 @@ async fn get_services(
 ) -> Result<Vec<Service>, SubJobHandlerError> {
     let services = repo
         .service
-        .get_services_by_topic(topic)
+        .get_services_enabled_by_topic(topic)
         .await
         .map_err(|e| SubJobHandlerError::FailedJob(e.to_string()))?;
 
@@ -210,4 +213,15 @@ async fn get_workers_online(
         .map_err(|e| SubJobHandlerError::Skip(e.to_string()))?;
 
     Ok(workers)
+}
+
+fn check_deadline(sub_job: &SubJob) -> Result<(), SubJobHandlerError> {
+    let deadline = sub_job
+        .deadline_at
+        .ok_or(SubJobHandlerError::FailedJob("No deadline".to_string()))?;
+
+    if Utc::now() > deadline {
+        return Err(SubJobHandlerError::FailedJob("Deadline passed".to_string()));
+    }
+    Ok(())
 }
