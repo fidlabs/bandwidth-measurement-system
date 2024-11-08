@@ -13,23 +13,24 @@ use axum_extra::extract::WithRejection;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{debug, error, info};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::api::api_response::*;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema, IntoParams)]
 pub struct GetJobPathParams {
     job_id: Uuid,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct GetJobResponse {
+    summary: JobSummary,
     #[serde(flatten)]
     job: JobWithSubJobsWithData,
-    summary: JobSummary,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct JobSummary {
     pub max_download_speed: Option<f64>,
     pub average_end_latency: Option<f64>,
@@ -37,8 +38,22 @@ pub struct JobSummary {
 }
 
 /// Get the job with sub jobs and worker data
+#[utoipa::path(
+    get,
+    path = "/jobs/{job_id}",
+    params (GetJobPathParams),
+    description = r#"
+**Get the job with sub jobs and worker data.**
+"#,
+    responses(
+        (status = 200, description = "Job Data", body = GetJobResponse),
+        (status = 400, description = "Bad Request", body = ErrorResponse),
+        (status = 500, description = "Internal Server Error", body = ErrorResponse),
+    ),
+    tags = ["Jobs"],
+)]
 #[debug_handler]
-pub async fn handle(
+pub async fn handle_get_job(
     WithRejection(Path(params), _): WithRejection<
         Path<GetJobPathParams>,
         ApiResponse<ErrorResponse>,

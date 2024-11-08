@@ -5,9 +5,10 @@ use sqlx::{
     prelude::{FromRow, Type},
     PgPool,
 };
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Deserialize, Serialize, Debug, Type)]
+#[derive(Deserialize, Serialize, Debug, Type, ToSchema, Clone)]
 #[sqlx(type_name = "sub_job_status")]
 pub enum SubJobStatus {
     Created,
@@ -18,7 +19,7 @@ pub enum SubJobStatus {
     Canceled,
 }
 
-#[derive(Deserialize, Serialize, Debug, Type)]
+#[derive(Deserialize, Serialize, Debug, Type, ToSchema, Clone)]
 #[sqlx(type_name = "sub_job_type")]
 pub enum SubJobType {
     CombinedDHP,
@@ -30,7 +31,7 @@ pub struct SubJobRepository {
     pool: PgPool,
 }
 
-#[derive(Serialize, Deserialize, FromRow, Debug, Type)]
+#[derive(Serialize, Deserialize, FromRow, Debug, Type, ToSchema, Clone)]
 #[allow(dead_code)]
 pub struct SubJob {
     pub id: Uuid,

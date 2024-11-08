@@ -2,35 +2,64 @@ use std::sync::Arc;
 
 use axum::{
     debug_handler,
-    extract::{Json, State},
+    extract::{Json, Path, State},
 };
 use axum_extra::extract::WithRejection;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{api::api_response::*, service_scaler::ServiceScalerInfo, state::AppState};
 
-#[derive(Deserialize)]
-pub struct ServicesScaleDownInput {
+#[derive(Deserialize, ToSchema, IntoParams)]
+pub struct ServicesScaleDownPathInput {
     pub service_id: Uuid,
+}
+#[derive(Deserialize, ToSchema)]
+pub struct ServicesScaleDownInput {
     pub amount: u64,
 }
 
+#[derive(Serialize, ToSchema)]
+pub struct ServiceScaleDownResponse(pub ServiceScalerInfo);
+
 /// Scale down a service by specified amount
+#[utoipa::path(
+    post,
+    path = "/services/{service_id}/scale/down",
+    params(ServicesScaleDownPathInput),
+    request_body(content = ServicesScaleDownInput),
+    description = r#"
+**Scale down a service by specified amount.**
+"#,
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "Services Scaled Down", body = ServiceScaleDownResponse),
+        (status = 400, description = "Bad Request", body = ErrorResponse),
+        (status = 500, description = "Internal Server Error", body = ErrorResponse),
+    ),
+    tags = ["Services"],
+)]
 #[debug_handler]
-pub async fn handle(
+pub async fn handle_services_scale_down(
     State(state): State<Arc<AppState>>,
+    WithRejection(Path(path), _): WithRejection<
+        Path<ServicesScaleDownPathInput>,
+        ApiResponse<ErrorResponse>,
+    >,
     WithRejection(Json(payload), _): WithRejection<
         Json<ServicesScaleDownInput>,
         ApiResponse<ErrorResponse>,
     >,
-) -> Result<ApiResponse<ServiceScalerInfo>, ApiResponse<()>> {
+) -> Result<ApiResponse<ServiceScaleDownResponse>, ApiResponse<()>> {
     // Get service from db
     let service = state
         .repo
         .service
-        .get_service_by_id(&payload.service_id)
+        .get_service_by_id(&path.service_id)
         .await
         .inspect_err(|e| {
             error!("ServiceRepository get service error: {:?}", e);
@@ -67,7 +96,7 @@ pub async fn handle(
             state
                 .repo
                 .service
-                .clear_descale_deadline(&payload.service_id)
+                .clear_descale_deadline(&path.service_id)
                 .await
                 .inspect_err(|e| {
                     error!("ServiceRepository clear descale at error: {:?}", e);
@@ -81,5 +110,5 @@ pub async fn handle(
         service_info.name, service_info.instances
     );
 
-    Ok(ok_response(service_info))
+    Ok(ok_response(ServiceScaleDownResponse(service_info)))
 }

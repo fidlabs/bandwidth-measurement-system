@@ -11,6 +11,7 @@ use serde_json::json;
 use std::sync::Arc;
 use tracing::{debug, info};
 use url::Url;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
@@ -20,24 +21,55 @@ use crate::{
     sub_job_repository::{SubJob, SubJobStatus, SubJobType},
 };
 
-#[derive(Deserialize)]
-pub struct JobInput {
+#[derive(Deserialize, ToSchema, Debug)]
+pub struct CreateJobInput {
+    #[schema(
+        example = "http://yablufc.ddns.net:7878/piece/baga6ea4seaqb4lqf6fzjomlnhn3jahwxg52ewgcbjelzyflqjjuc7by224hbwla"
+    )]
     pub url: String,
+    #[schema(example = "us_east")]
     pub routing_key: String,
 }
 
-#[derive(Serialize)]
-pub struct JobResponse {
-    pub job_id: Uuid,
-    pub sub_jobs: Vec<Uuid>,
+#[derive(Serialize, ToSchema)]
+pub struct CreateJobResponse {
+    #[serde(flatten)]
+    pub job: Job,
+    pub sub_jobs: Vec<SubJob>,
 }
 
-/// Create a new job to be processed by the worker
+/// Creates a new Job to be processed by the worker
+#[utoipa::path(
+    post,
+    path = "/jobs",
+    request_body(content = CreateJobInput),
+    description = r#"
+**Creates a new Job to be processed by the worker.**
+
+The Job consists of three subjobs:
+- **Scaling SubJob**: Facilitates automatic scaling of the workers.
+- **Benchmark SubJob 1**: Performs the first part of the benchmark work.
+- **Benchmark SubJob 2**: Performs the second part of the benchmark work.
+
+**All subjobs are carried out sequentially.**
+    "#,
+    responses(
+        (status = 200, description = "Job Created", body = CreateJobResponse),
+        (status = 400, description = "Bad Request", body = ErrorResponse),
+        (status = 500, description = "Internal Server Error", body = ErrorResponse),
+    ),
+    tags = ["Jobs"],
+)]
 #[debug_handler]
-pub async fn handle(
+pub async fn handle_create_job(
     State(state): State<Arc<AppState>>,
-    WithRejection(Json(payload), _): WithRejection<Json<JobInput>, ApiResponse<ErrorResponse>>,
-) -> Result<ApiResponse<JobResponse>, ApiResponse<()>> {
+    WithRejection(Json(payload), _): WithRejection<
+        Json<CreateJobInput>,
+        ApiResponse<ErrorResponse>,
+    >,
+) -> Result<ApiResponse<CreateJobResponse>, ApiResponse<()>> {
+    info!("Creating job with payload: {:?}", payload);
+
     // Validation
     let url = validate_url(&payload)?;
     validate_routing_key(&payload)?;
@@ -79,21 +111,21 @@ pub async fn handle(
         .await
         .map_err(|_| internal_server_error("Failed to create scaling sub job"))?;
 
-    let sub_job_1 = create_sub_job(&state, &job).await?;
-    let sub_job_2 = create_sub_job(&state, &job).await?;
+    let sub_jobs = vec![
+        create_sub_job(&state, &job).await?,
+        create_sub_job(&state, &job).await?,
+    ];
 
-    let sub_jobs = vec![sub_job_1.id, sub_job_2.id];
-
-    info!(
+    debug!(
         "Job with sub jobs created successfully: {}, sub_jobs: {:?}",
         job_id, sub_jobs
     );
 
-    Ok(ok_response(JobResponse { job_id, sub_jobs }))
+    Ok(ok_response(CreateJobResponse { job, sub_jobs }))
 }
 
 /// Validate url and its scheme
-fn validate_url(payload: &JobInput) -> Result<Url, ApiResponse<()>> {
+fn validate_url(payload: &CreateJobInput) -> Result<Url, ApiResponse<()>> {
     let url = Url::parse(&payload.url).map_err(|_| bad_request("Invalid URL provided"))?;
     match url.scheme() {
         "http" | "https" => Ok(url),
@@ -103,7 +135,7 @@ fn validate_url(payload: &JobInput) -> Result<Url, ApiResponse<()>> {
 
 /// Validate routing key
 /// In future we want to validate if the routing key is valid, maybe by checking a set of allowed keys
-fn validate_routing_key(payload: &JobInput) -> Result<(), ApiResponse<()>> {
+fn validate_routing_key(payload: &CreateJobInput) -> Result<(), ApiResponse<()>> {
     if payload.routing_key.is_empty() {
         return Err(bad_request("Routing key cannot be empty"));
     }

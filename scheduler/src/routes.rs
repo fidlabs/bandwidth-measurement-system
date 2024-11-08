@@ -32,29 +32,44 @@ async fn auth(req: Request, next: Next) -> Result<Response, ApiResponse<()>> {
 
 pub fn create_routes() -> Router<Arc<AppState>> {
     let routes = Router::new()
-        .route("/healthcheck", get(healthcheck::handle))
-        .route("/jobs", post(jobs::create_job::handle))
-        .route("/jobs", get(jobs::get_jobs::handle))
-        .route("/jobs/:job_id", get(jobs::get_job::handle))
-        .route("/jobs/:job_id", delete(jobs::cancel_job::handle));
+        .route("/healthcheck", get(healthcheck::handle_healthcheck))
+        .route("/jobs", post(jobs::create_job::handle_create_job))
+        .route("/jobs", get(jobs::get_jobs::handle_get_jobs))
+        .route("/jobs/:job_id", get(jobs::get_job::handle_get_job))
+        .route("/jobs/:job_id", delete(jobs::cancel_job::handle_cancel_job));
 
     let auth_routes = Router::new()
-        .route("/services", get(services::get_services::handle))
-        .route("/services", post(services::create_service::handle))
-        .route("/services", put(services::update_service::handle))
-        .route("/services", delete(services::delete_service::handle))
-        .route("/services/scale/info", get(services::services_info::handle))
         .route(
-            "/services/scale/up",
-            post(services::services_scale_up::handle),
+            "/services",
+            get(services::get_services::handle_get_services),
         )
         .route(
-            "/services/scale/down",
-            post(services::services_scale_down::handle),
+            "/services",
+            post(services::create_service::handle_create_service),
         )
         .route(
             "/services/scale/down/all",
-            post(services::services_scale_down_all::handle),
+            post(services::services_scale_down_all::handle_services_scale_down_all),
+        )
+        .route(
+            "/services/:service_id",
+            put(services::update_service::handle_update_service),
+        )
+        .route(
+            "/services/:service_id",
+            delete(services::delete_service::handle_delete_service),
+        )
+        .route(
+            "/services/:service_id/scale/info",
+            get(services::services_info::handle_services_info),
+        )
+        .route(
+            "/services/:service_id/scale/up",
+            post(services::services_scale_up::handle_services_scale_up),
+        )
+        .route(
+            "/services/:service_id/scale/down",
+            post(services::services_scale_down::handle_services_scale_down),
         )
         .layer(middleware::from_fn(auth));
 

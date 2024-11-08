@@ -5,8 +5,9 @@ use axum::{
     extract::{Json, State},
 };
 use axum_extra::extract::WithRejection;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::error;
+use utoipa::ToSchema;
 
 use crate::{
     api::api_response::*,
@@ -14,25 +15,51 @@ use crate::{
     state::AppState,
 };
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateServiceInput {
+    #[schema(example = "my-service")]
     pub service_name: String,
+    #[schema(example = "AWSFargate")]
     pub provider_type: ProviderType,
+    #[schema(example = r#"["topic1", "topic2"]"#)]
     pub topics: Vec<String>,
+    #[schema(example = "a-cluster", required = false)]
     pub cluster: Option<String>,
+    #[schema(example = "us-east-1", required = false)]
     pub region: Option<String>,
 }
 
-/// POST /services
+#[derive(Serialize, ToSchema)]
+pub struct CreateServiceResponse(pub Service);
+
 /// Create a new service and its topics
+#[utoipa::path(
+    post,
+    path = "/services",
+    request_body(content = CreateServiceInput),
+    description = r#"
+**Create a new service and its topics.**
+
+The service is a deployment unit of worker that can be scaled up or down.
+"#,
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "Created Service", body = CreateServiceResponse),
+        (status = 400, description = "Bad Request", body = ErrorResponse),
+        (status = 500, description = "Internal Server Error", body = ErrorResponse),
+    ),
+    tags = ["Services"],
+)]
 #[debug_handler]
-pub async fn handle(
+pub async fn handle_create_service(
     State(state): State<Arc<AppState>>,
     WithRejection(Json(payload), _): WithRejection<
         Json<CreateServiceInput>,
         ApiResponse<ErrorResponse>,
     >,
-) -> Result<ApiResponse<Service>, ApiResponse<()>> {
+) -> Result<ApiResponse<CreateServiceResponse>, ApiResponse<()>> {
     // Validation
     if payload.topics.is_empty() {
         return Err(bad_request("Field 'topics' cannot be empty"))?;
@@ -77,5 +104,5 @@ pub async fn handle(
         })
         .map_err(|_| internal_server_error("Failed to create service topics"))?;
 
-    Ok(ok_response(service))
+    Ok(ok_response(CreateServiceResponse(service)))
 }

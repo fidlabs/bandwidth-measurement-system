@@ -1,5 +1,6 @@
 use std::{error::Error, sync::Arc};
 
+use api::api_doc::ApiDoc;
 use axum::Router;
 use background::{
     service_descaler::service_descaler_handler, sub_job_handler::sub_job_handler,
@@ -22,6 +23,8 @@ use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 mod api;
 mod background;
@@ -111,6 +114,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let app = Router::new()
         .merge(routes::create_routes())
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", ApiDoc::openapi()))
         .layer(
             ServiceBuilder::new().layer(TraceLayer::new_for_http()),
             // TODO: add something to authenticate requests
