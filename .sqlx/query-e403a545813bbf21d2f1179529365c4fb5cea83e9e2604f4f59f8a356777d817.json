@@ -1,0 +1,67 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                j.id,\n                j.url,\n                j.routing_key,\n                j.status AS \"status!: JobStatus\",\n                j.details AS \"details!: serde_json::Value\",\n                COALESCE(sub_jobs_agg.sub_jobs, '[]'::json) AS \"sub_jobs!: Json<Vec<SubJob>>\"\n            FROM jobs j\n            LEFT JOIN LATERAL (\n                SELECT JSON_AGG(\n                    JSON_BUILD_OBJECT(\n                        'id', sj.id,\n                        'job_id', sj.job_id,\n                        'status', sj.status,\n                        'type', sj.type,\n                        'details', sj.details,\n                        'deadline_at', sj.deadline_at\n                    )\n                ) AS \"sub_jobs\"\n                FROM sub_jobs sj\n                WHERE sj.job_id = j.id\n            ) sub_jobs_agg ON TRUE\n            ORDER BY created_at DESC\n            LIMIT $1 OFFSET $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "url",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "routing_key",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "status!: JobStatus",
+        "type_info": {
+          "Custom": {
+            "name": "job_status",
+            "kind": {
+              "Enum": [
+                "Created",
+                "Pending",
+                "Processing",
+                "Completed",
+                "Failed",
+                "Canceled"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "details!: serde_json::Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "sub_jobs!: Json<Vec<SubJob>>",
+        "type_info": "Json"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "e403a545813bbf21d2f1179529365c4fb5cea83e9e2604f4f59f8a356777d817"
+}
