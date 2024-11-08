@@ -27,6 +27,16 @@ impl Modify for SecurityAddon {
 
 #[derive(OpenApi)]
 #[openapi(
+    // API Metadata
+    info(
+        title = "BMS: Bandwidth Management System",
+        description = r#"
+This is the API documentation for the Bandwidth Management System (BMS) service.
+
+Creating a Job requires an endpoint URL to a file (e.g. piece) as well as a routing_key (service topic) to which the job will be sent.
+        "#,
+        version = "1.0.0"
+    ),
     // API Handler Functions
     paths(
         // Healthcheck
