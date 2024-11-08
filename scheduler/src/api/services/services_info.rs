@@ -2,26 +2,46 @@ use std::sync::Arc;
 
 use axum::{
     debug_handler,
-    extract::{Query, State},
+    extract::{Path, State},
 };
 use axum_extra::extract::WithRejection;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{api::api_response::*, service_scaler::ServiceScalerInfo, state::AppState};
 
-#[derive(Deserialize)]
-pub struct ServicesScaleInfoInput {
+#[derive(Deserialize, ToSchema, IntoParams)]
+pub struct ServicesScaleInfoPathInput {
     pub service_id: Uuid,
 }
 
-/// GET /services/info?service_name={service_name}
-/// Get info about service
+#[derive(Serialize, ToSchema)]
+pub struct ServicesScaleInfoResponse(pub ServiceScalerInfo);
+
+/// Get scaling info about service
+#[utoipa::path(
+    get,
+    path = "/services/{service_id}/scale/info",
+    params(ServicesScaleInfoPathInput),
+    description = r#"
+**Get scaling info about service.**
+"#,
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "Get Service Scaler Info", body = ServicesScaleInfoResponse),
+        (status = 400, description = "Bad Request", body = ErrorResponse),
+        (status = 500, description = "Internal Server Error", body = ErrorResponse),
+    ),
+    tags = ["Services"],
+)]
 #[debug_handler]
-pub async fn handle(
-    WithRejection(Query(params), _): WithRejection<
-        Query<ServicesScaleInfoInput>,
+pub async fn handle_services_info(
+    WithRejection(Path(path), _): WithRejection<
+        Path<ServicesScaleInfoPathInput>,
         ApiResponse<ErrorResponse>,
     >,
     State(state): State<Arc<AppState>>,
@@ -30,7 +50,7 @@ pub async fn handle(
     let service = state
         .repo
         .service
-        .get_service_by_id(&params.service_id)
+        .get_service_by_id(&path.service_id)
         .await
         .inspect_err(|e| {
             error!("ServiceRepository get service error: {:?}", e);

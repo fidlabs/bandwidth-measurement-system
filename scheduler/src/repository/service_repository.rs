@@ -5,16 +5,17 @@ use sqlx::{
     prelude::{FromRow, Type},
     PgPool,
 };
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Type, Eq, Hash, PartialEq, Deserialize, Serialize, Clone)]
+#[derive(Debug, Type, Eq, Hash, PartialEq, Deserialize, Serialize, Clone, ToSchema)]
 #[sqlx(type_name = "provider_type", rename_all = "snake_case")]
 pub enum ProviderType {
     DockerLocal,
     AWSFargate,
 }
 
-#[derive(Debug, FromRow, Serialize)]
+#[derive(Debug, FromRow, Serialize, ToSchema)]
 pub struct Service {
     pub id: Uuid,
     pub name: String,
@@ -24,7 +25,7 @@ pub struct Service {
     pub descale_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, FromRow, Serialize)]
+#[derive(Debug, FromRow, Serialize, ToSchema)]
 pub struct ServiceWithTopics {
     pub id: Uuid,
     pub name: String,

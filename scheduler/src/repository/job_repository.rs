@@ -6,11 +6,12 @@ use sqlx::{
     types::Json,
     PgPool,
 };
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::sub_job_repository::{SubJob, SubJobStatus, SubJobType};
 
-#[derive(Debug, Type, Serialize, Deserialize)]
+#[derive(Debug, Type, Serialize, Deserialize, ToSchema)]
 #[sqlx(type_name = "job_status")]
 pub enum JobStatus {
     Created,
@@ -35,17 +36,18 @@ pub struct JobWithData {
     pub data: Vec<Json<WorkerData>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, FromRow)]
+#[derive(Serialize, Deserialize, Debug, FromRow, ToSchema)]
 pub struct JobWithSubJobsWithData {
     pub id: Uuid,
     pub url: String,
     pub routing_key: String,
     pub status: JobStatus,
     pub details: JobDetails,
+    #[schema(value_type = Vec<SubJobWithData>)]
     pub sub_jobs: Json<Vec<SubJobWithData>>,
 }
 
-#[derive(Serialize, Deserialize, FromRow, Debug, Type)]
+#[derive(Serialize, Deserialize, FromRow, Debug, Type, ToSchema, Clone)]
 pub struct SubJobWithData {
     pub id: Uuid,
     pub job_id: Uuid,
@@ -56,7 +58,7 @@ pub struct SubJobWithData {
     pub worker_data: Vec<WorkerData>,
 }
 
-#[derive(Serialize, Deserialize, FromRow, Debug, Type)]
+#[derive(Serialize, Deserialize, FromRow, Debug, Type, ToSchema, Clone)]
 pub struct WorkerData {
     pub id: Uuid,
     pub worker_name: String,
@@ -83,7 +85,7 @@ pub struct WorkerDataError {
     error: String,
 }
 
-#[derive(Serialize, Deserialize, FromRow, Type, Debug)]
+#[derive(Serialize, Deserialize, FromRow, Type, Debug, ToSchema)]
 pub struct JobDetails {
     pub start_range: i64,
     pub end_range: i64,
@@ -95,7 +97,7 @@ impl From<serde_json::Value> for JobDetails {
     }
 }
 
-#[derive(Debug, FromRow, Serialize)]
+#[derive(Debug, FromRow, Serialize, ToSchema)]
 #[allow(dead_code)]
 pub struct Job {
     pub id: Uuid,
@@ -105,13 +107,14 @@ pub struct Job {
     pub details: JobDetails,
 }
 
-#[derive(Serialize, Deserialize, Debug, FromRow)]
+#[derive(Serialize, Deserialize, Debug, FromRow, ToSchema)]
 pub struct JobWithSubJobs {
     pub id: Uuid,
     pub url: String,
     pub routing_key: String,
     pub status: JobStatus,
     pub details: JobDetails,
+    #[schema(value_type = Vec<SubJob>)]
     pub sub_jobs: Json<Vec<SubJob>>,
 }
 
@@ -258,8 +261,8 @@ impl JobRepository {
 
     pub async fn get_jobs_with_subjobs(
         &self,
-        page: Option<u32>,
-        limit: Option<u32>,
+        page: i64,
+        limit: i64,
     ) -> Result<Vec<JobWithSubJobs>, sqlx::Error> {
         let jobs = sqlx::query_as!(
             JobWithSubJobs,
@@ -289,8 +292,8 @@ impl JobRepository {
             ORDER BY created_at DESC
             LIMIT $1 OFFSET $2
             "#,
-            limit.unwrap_or(10) as i64,
-            page.unwrap_or(0) as i64 * limit.unwrap_or(10) as i64
+            limit,
+            page * limit
         )
         .fetch_all(&self.pool)
         .await?;

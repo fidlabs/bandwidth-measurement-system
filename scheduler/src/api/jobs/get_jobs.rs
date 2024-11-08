@@ -12,23 +12,41 @@ use axum::{
 use axum_extra::extract::WithRejection;
 use serde::{Deserialize, Serialize};
 use tracing::error;
+use utoipa::{IntoParams, ToSchema};
 
 use crate::api::api_response::*;
 
-#[derive(Deserialize)]
-pub struct GetJobsPathParams {
-    page: Option<u32>,
-    limit: Option<u32>,
+#[derive(Deserialize, ToSchema, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct GetJobsQueryParams {
+    #[schema(example = 0)]
+    page: Option<i64>,
+    #[schema(example = 100)]
+    limit: Option<i64>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct GetJobsResponse(pub Vec<JobWithSubJobs>);
 
 /// Get paginated jobs with sub jobs
+#[utoipa::path(
+    get,
+    path = "/jobs",
+    params (GetJobsQueryParams),
+    description = r#"
+**Get paginated jobs with sub jobs.**
+"#,
+    responses(
+        (status = 200, description = "Jobs Data", body = GetJobsResponse),
+        (status = 400, description = "Bad Request", body = ErrorResponse),
+        (status = 500, description = "Internal Server Error", body = ErrorResponse),
+    ),
+    tags = ["Jobs"],
+)]
 #[debug_handler]
-pub async fn handle(
+pub async fn handle_get_jobs(
     WithRejection(Query(params), _): WithRejection<
-        Query<GetJobsPathParams>,
+        Query<GetJobsQueryParams>,
         ApiResponse<ErrorResponse>,
     >,
     State(state): State<Arc<AppState>>,
@@ -36,7 +54,10 @@ pub async fn handle(
     let jobs = state
         .repo
         .job
-        .get_jobs_with_subjobs(params.page, params.limit)
+        .get_jobs_with_subjobs(
+            params.page.unwrap_or(0),
+            params.limit.unwrap_or(100).max(100),
+        )
         .await
         .map_err(|e| match e {
             sqlx::Error::RowNotFound => not_found("Job not found"),

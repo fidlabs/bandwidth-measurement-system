@@ -8,6 +8,7 @@ use color_eyre::Result;
 use docker_scaler::DockerScaler;
 use fargate_scaler::FargateScaler;
 use serde::Serialize;
+use utoipa::ToSchema;
 
 use crate::{
     config::CONFIG,
@@ -37,7 +38,7 @@ impl ServiceScalerError {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[allow(dead_code)]
 pub struct ServiceScalerInfo {
     pub name: String,

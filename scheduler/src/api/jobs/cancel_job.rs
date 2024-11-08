@@ -13,21 +13,36 @@ use axum::{
 use axum_extra::extract::WithRejection;
 use serde::{Deserialize, Serialize};
 use tracing::{error, info};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::api::api_response::*;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema, IntoParams)]
 pub struct CancelJobPathParams {
     job_id: Uuid,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct CancelJobResponse(pub JobWithSubJobs);
 
 /// Cancel a job and all its sub jobs
+#[utoipa::path(
+    delete,
+    path = "/jobs/{job_id}",
+    params (CancelJobPathParams),
+    description = r#"
+**Cancel a job and all its sub job.s**
+"#,
+    responses(
+        (status = 200, description = "Job Canceled", body = CancelJobResponse),
+        (status = 400, description = "Bad Request", body = ErrorResponse),
+        (status = 500, description = "Internal Server Error", body = ErrorResponse),
+    ),
+    tags = ["Jobs"],
+)]
 #[debug_handler]
-pub async fn handle(
+pub async fn handle_cancel_job(
     WithRejection(Path(params), _): WithRejection<
         Path<CancelJobPathParams>,
         ApiResponse<ErrorResponse>,
