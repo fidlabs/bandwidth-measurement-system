@@ -69,14 +69,15 @@ async fn process_status_created(
     let download_start_time = start_time + Duration::seconds(DOWNLOAD_DELAY_SECS);
 
     let workers_online = get_workers_online_by_subjob_topic(repo.clone(), sub_job).await?;
+    let workers_online_total_count = workers_online.len() as i64;
 
     let (excluded_workers, workers_count) =
-        match get_excluded_workers(sub_job, &workers_online).await {
+        match get_excluded_workers(sub_job, workers_online).await {
             Ok((excluded_workers, workers_count)) => (excluded_workers, workers_count),
             Err(e) => {
                 error!("Failed to get excluded workers: {}", e);
 
-                (vec![], workers_online.len() as i64)
+                (vec![], workers_online_total_count)
             }
         };
 
@@ -194,7 +195,7 @@ fn check_deadline(sub_job: &SubJob) -> Result<(), SubJobHandlerError> {
 
 async fn get_excluded_workers(
     sub_job: &SubJob,
-    workers_online: &Vec<String>,
+    workers_online: Vec<String>,
 ) -> Result<(Vec<String>, i64)> {
     let partial = sub_job.details["partial"]
         .as_number()
