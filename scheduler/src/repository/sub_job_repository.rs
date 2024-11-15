@@ -54,8 +54,11 @@ pub struct WorkerData {
 
 #[derive(Serialize, Default)]
 pub struct SubJobDetails {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub partial: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub workers_count: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub topic: Option<String>,
 }
 impl SubJobDetails {
