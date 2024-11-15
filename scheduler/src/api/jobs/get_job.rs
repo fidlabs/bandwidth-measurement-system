@@ -103,7 +103,7 @@ pub async fn handle_get_job(
             });
 
             DownloadSpeed {
-                sub_job_id: sub_job.id.clone(),
+                sub_job_id: sub_job.id,
                 is_partial: sub_job.details.get("partial").is_some(),
                 download_speed: sub_job_download_speed.sum::<f64>(),
             }
@@ -113,7 +113,7 @@ pub async fn handle_get_job(
 
     let max_download_speed = download_speeds
         .iter()
-        .map(|ds| return ds.download_speed)
+        .map(|ds| ds.download_speed)
         .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
         .unwrap_or(0.0);
 
