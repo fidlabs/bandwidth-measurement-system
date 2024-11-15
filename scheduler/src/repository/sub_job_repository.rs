@@ -52,6 +52,32 @@ pub struct WorkerData {
     head: serde_json::Value,
 }
 
+#[derive(Serialize, Default)]
+pub struct SubJobDetails {
+    pub partial: Option<i64>,
+    pub workers_count: Option<i64>,
+    pub topic: Option<String>,
+}
+impl SubJobDetails {
+    pub fn empty() -> Self {
+        SubJobDetails {
+            ..Default::default()
+        }
+    }
+    pub fn partial(partial: i64) -> Self {
+        SubJobDetails {
+            partial: Some(partial),
+            ..Default::default()
+        }
+    }
+    pub fn topic(topic: String) -> Self {
+        SubJobDetails {
+            topic: Some(topic),
+            ..Default::default()
+        }
+    }
+}
+
 impl SubJobRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
@@ -63,7 +89,7 @@ impl SubJobRepository {
         job_id: Uuid,
         status: SubJobStatus,
         job_type: SubJobType,
-        details: serde_json::Value,
+        details: SubJobDetails,
     ) -> Result<SubJob, sqlx::Error> {
         let sub_job = sqlx::query_as!(
           SubJob,
@@ -76,7 +102,7 @@ impl SubJobRepository {
             job_id,
             status as SubJobStatus,
             job_type as SubJobType,
-            details,
+            serde_json::to_value(details).unwrap(),
         )
         .fetch_one(&self.pool)
         .await?;

@@ -71,15 +71,14 @@ async fn process_status_created(
     let workers_online = get_workers_online_by_subjob_topic(repo.clone(), sub_job).await?;
     let workers_online_total_count = workers_online.len() as i64;
 
-    let (excluded_workers, workers_count) =
-        match get_excluded_workers(sub_job, workers_online).await {
-            Ok((excluded_workers, workers_count)) => (excluded_workers, workers_count),
-            Err(e) => {
-                error!("Failed to get excluded workers: {}", e);
+    let (excluded_workers, workers_count) = match get_excluded_workers(sub_job, workers_online) {
+        Ok((excluded_workers, workers_count)) => (excluded_workers, workers_count),
+        Err(e) => {
+            error!("Failed to get excluded workers: {}", e);
 
-                (vec![], workers_online_total_count)
-            }
-        };
+            (vec![], workers_online_total_count)
+        }
+    };
 
     repo.sub_job
         .update_sub_job_workers_count(&sub_job.id, workers_count)
@@ -193,7 +192,7 @@ fn check_deadline(sub_job: &SubJob) -> Result<(), SubJobHandlerError> {
     Ok(())
 }
 
-async fn get_excluded_workers(
+fn get_excluded_workers(
     sub_job: &SubJob,
     workers_online: Vec<String>,
 ) -> Result<(Vec<String>, i64)> {
@@ -201,15 +200,16 @@ async fn get_excluded_workers(
         .as_number()
         .context("missing partial")?
         .as_u64()
-        .context("missing partial")?;
+        .context("missing partial")? as usize;
 
     if partial == 0 || partial >= 100 {
         bail!("invalid partial".to_string());
     }
 
-    let partial_count = (workers_online.len() as u64)
+    let partial_count = workers_online
+        .len()
         .saturating_mul(100 - partial)
-        .saturating_div(100) as usize;
+        .saturating_div(100);
 
     debug!(
         "Partial count: {}, workers_online: {}",

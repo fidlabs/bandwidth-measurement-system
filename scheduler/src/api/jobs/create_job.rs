@@ -18,7 +18,7 @@ use crate::{
     api::api_response::*,
     job_repository::{Job, JobStatus},
     state::AppState,
-    sub_job_repository::{SubJob, SubJobStatus, SubJobType},
+    sub_job_repository::{SubJob, SubJobDetails, SubJobStatus, SubJobType},
 };
 
 #[derive(Deserialize, ToSchema, Debug)]
@@ -104,17 +104,15 @@ pub async fn handle_create_job(
             job.id,
             SubJobStatus::Created,
             SubJobType::Scaling,
-            json!({
-                "topic": job.routing_key,
-            }),
+            SubJobDetails::topic(job.routing_key.clone()),
         )
         .await
         .map_err(|_| internal_server_error("Failed to create scaling sub job"))?;
 
     let sub_jobs = vec![
         scaling_sub_job,
-        create_sub_job(&state, &job, json!({"partial": 80})).await?,
-        create_sub_job(&state, &job, json!({})).await?,
+        create_sub_job(&state, &job, SubJobDetails::partial(80)).await?,
+        create_sub_job(&state, &job, SubJobDetails::empty()).await?,
     ];
 
     debug!(
@@ -186,7 +184,7 @@ async fn get_file_range_for_file(url: &str) -> Result<(u64, u64), ApiResponse<()
 async fn create_sub_job(
     state: &Arc<AppState>,
     job: &Job,
-    details: serde_json::Value,
+    details: SubJobDetails,
 ) -> Result<SubJob, ApiResponse<()>> {
     let sub_job = state
         .repo

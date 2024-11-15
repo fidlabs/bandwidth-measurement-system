@@ -34,7 +34,6 @@ pub struct GetJobResponse {
 #[derive(Serialize, ToSchema)]
 pub struct DownloadSpeed {
     sub_job_id: Uuid,
-    is_partial: bool,
     download_speed: f64,
 }
 
@@ -104,7 +103,6 @@ pub async fn handle_get_job(
 
             DownloadSpeed {
                 sub_job_id: sub_job.id,
-                is_partial: sub_job.details.get("partial").is_some(),
                 download_speed: sub_job_download_speed.sum::<f64>(),
             }
         });
