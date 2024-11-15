@@ -121,6 +121,11 @@ impl JobConsumer {
         // Parse the received message
         let (job_id, job_message) = self.parse_message(&content_str).await?;
 
+        if job_message.excluded_workers.contains(&CONFIG.worker_name) {
+            info!("Worker is excluded from the job: {}", &CONFIG.worker_name);
+            return Ok(());
+        }
+
         // React to the received data
         let result = self.process_message(job_id, job_message).await?;
         let result_message = Message::WorkerResult { job_id, result };

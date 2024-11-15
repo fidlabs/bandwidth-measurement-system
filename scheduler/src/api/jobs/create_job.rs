@@ -96,7 +96,7 @@ pub async fn handle_create_job(
 
     debug!("Job created successfully: {:?}", job);
 
-    state
+    let scaling_sub_job = state
         .repo
         .sub_job
         .create_sub_job(
@@ -112,8 +112,9 @@ pub async fn handle_create_job(
         .map_err(|_| internal_server_error("Failed to create scaling sub job"))?;
 
     let sub_jobs = vec![
-        create_sub_job(&state, &job).await?,
-        create_sub_job(&state, &job).await?,
+        scaling_sub_job,
+        create_sub_job(&state, &job, json!({"partial": 80})).await?,
+        create_sub_job(&state, &job, json!({})).await?,
     ];
 
     debug!(
@@ -182,7 +183,11 @@ async fn get_file_range_for_file(url: &str) -> Result<(u64, u64), ApiResponse<()
     Ok((start_range, end_range))
 }
 
-async fn create_sub_job(state: &Arc<AppState>, job: &Job) -> Result<SubJob, ApiResponse<()>> {
+async fn create_sub_job(
+    state: &Arc<AppState>,
+    job: &Job,
+    details: serde_json::Value,
+) -> Result<SubJob, ApiResponse<()>> {
     let sub_job = state
         .repo
         .sub_job
@@ -191,7 +196,7 @@ async fn create_sub_job(state: &Arc<AppState>, job: &Job) -> Result<SubJob, ApiR
             job.id,
             SubJobStatus::Created,
             SubJobType::CombinedDHP,
-            json!({}),
+            details,
         )
         .await
         .map_err(|_| internal_server_error("Failed to create sub job"))?;

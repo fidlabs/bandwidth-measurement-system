@@ -204,4 +204,45 @@ impl SubJobRepository {
 
         Ok(sub_job)
     }
+
+    pub async fn get_sub_job_by_id_and_type(
+        &self,
+        job_id: &Uuid,
+        sub_job_type: SubJobType,
+    ) -> Result<SubJob, sqlx::Error> {
+        let sub_job = sqlx::query_as!(
+            SubJob,
+            r#"
+            SELECT id, job_id, status as "status!: SubJobStatus", type as "type!: SubJobType", details, deadline_at
+            FROM sub_jobs
+            WHERE job_id = $1 AND type = $2
+            "#,
+            job_id,
+            sub_job_type as SubJobType,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(sub_job)
+    }
+
+    pub async fn update_sub_job_workers_count(
+        &self,
+        sub_job_id: &Uuid,
+        workers_count: i64,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query!(
+            r#"
+            UPDATE sub_jobs
+            SET details = details || jsonb_build_object('workers_count', $2::bigint)
+            WHERE id = $1
+            "#,
+            sub_job_id,
+            workers_count,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
 }

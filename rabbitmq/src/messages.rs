@@ -19,6 +19,7 @@ pub struct JobMessage {
     pub download_start_time: DateTime<Utc>,
     pub start_range: u64,
     pub end_range: u64,
+    pub excluded_workers: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

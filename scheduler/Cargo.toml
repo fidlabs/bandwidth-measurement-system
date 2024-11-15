@@ -8,14 +8,14 @@ authors = ["Michał Mach <michal.mach@neti-soft.com>"]
 amqprs = { version = "2.0.0", features = ["tls"] }
 anyhow = "1.0.87"
 async-trait = "0.1.82"
-axum = { version = "0.7.5", features = ["macros"] }
-axum-extra = "0.9.3"
+axum = { version = "0.7.5", features = ["macros", "tokio"] }
+axum-extra = { version = "0.9.3" }
 color-eyre = "0.6.3"
 dotenvy = "0.15.7"
 once_cell = "1.19.0"
 rabbitmq = { version = "1.0.0", path = "../rabbitmq" }
 rand = "0.8.5"
-reqwest = "0.12.7"
+reqwest = {version = "0.12.7", features = ["json"]}
 serde = "1.0.209"
 serde_json = "1.0.128"
 sqlx = { version = "0.8.2", features = [
@@ -28,7 +28,7 @@ sqlx = { version = "0.8.2", features = [
 ] }
 tokio = { version = "1.40.0", features = ["full"] }
 tower = "0.5.0"
-tower-http = { version = "0.5.2", features = ["trace"] }
+tower-http = { version = "0.5.2", features = ["trace", "fs"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "fmt"] }
 url = "2.5.2"
