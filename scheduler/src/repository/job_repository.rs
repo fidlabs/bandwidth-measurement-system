@@ -231,7 +231,7 @@ impl JobRepository {
                         'deadline_at', sj.deadline_at,
                         'worker_data', COALESCE(worker_data_agg.worker_data, '[]'::json)
                     )
-                    ORDER BY sj.created_at DESC
+                    ORDER BY sj.created_at ASC
                 ) AS "sub_jobs"
                 FROM sub_jobs sj
                 LEFT JOIN LATERAL (
@@ -244,7 +244,7 @@ impl JobRepository {
                             'ping', d.ping,
                             'head', d.head
                         )
-                        ORDER BY d.created_at DESC
+                        ORDER BY d.created_at ASC
                     ) AS "worker_data"
                     FROM worker_data d
                     WHERE d.sub_job_id = sj.id
@@ -287,7 +287,7 @@ impl JobRepository {
                         'details', sj.details,
                         'deadline_at', sj.deadline_at
                     )
-                    ORDER BY sj.created_at DESC
+                    ORDER BY sj.created_at ASC
                 ) AS "sub_jobs"
                 FROM sub_jobs sj
                 WHERE sj.job_id = j.id
@@ -329,6 +329,7 @@ impl JobRepository {
                         'details', sj.details,
                         'deadline_at', sj.deadline_at
                     )
+                    ORDER BY sj.created_at ASC
                 ) AS "sub_jobs"
                 FROM sub_jobs sj
                 WHERE sj.job_id = j.id

@@ -19,7 +19,7 @@ pub enum SubJobStatus {
     Canceled,
 }
 
-#[derive(Deserialize, Serialize, Debug, Type, ToSchema, Clone)]
+#[derive(Deserialize, Serialize, Debug, Type, ToSchema, Clone, PartialEq)]
 #[sqlx(type_name = "sub_job_type")]
 pub enum SubJobType {
     CombinedDHP,
