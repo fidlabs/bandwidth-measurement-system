@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS public.unified_verified_deal;

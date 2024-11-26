@@ -11,7 +11,7 @@ use tracing::error;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-use crate::{ service_repository::Service, state::AppState};
+use crate::{service_repository::Service, state::AppState};
 
 #[derive(Deserialize, ToSchema, IntoParams)]
 pub struct DeleteServicePathInput {

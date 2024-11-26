@@ -228,7 +228,7 @@ async fn get_working_url(
     let max_offset = if extended_search.unwrap_or(false) {
         5 * limit
     } else {
-        1 * limit
+        limit
     };
 
     loop {
