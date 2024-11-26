@@ -193,11 +193,11 @@ impl JobRepository {
         sqlx::query!(
             r#"
             UPDATE jobs
-            SET details = jsonb_set(details, '{workers_count}', $2, true)
+            SET details = details || jsonb_build_object('workers_count', $2::bigint)
             WHERE id = $1
             "#,
             job_id,
-            serde_json::Value::Number(expected_workers.into()),
+            expected_workers,
         )
         .execute(&self.pool)
         .await?;
@@ -231,6 +231,7 @@ impl JobRepository {
                         'deadline_at', sj.deadline_at,
                         'worker_data', COALESCE(worker_data_agg.worker_data, '[]'::json)
                     )
+                    ORDER BY sj.created_at ASC
                 ) AS "sub_jobs"
                 FROM sub_jobs sj
                 LEFT JOIN LATERAL (
@@ -243,6 +244,7 @@ impl JobRepository {
                             'ping', d.ping,
                             'head', d.head
                         )
+                        ORDER BY d.created_at ASC
                     ) AS "worker_data"
                     FROM worker_data d
                     WHERE d.sub_job_id = sj.id
@@ -285,6 +287,7 @@ impl JobRepository {
                         'details', sj.details,
                         'deadline_at', sj.deadline_at
                     )
+                    ORDER BY sj.created_at ASC
                 ) AS "sub_jobs"
                 FROM sub_jobs sj
                 WHERE sj.job_id = j.id
@@ -326,6 +329,7 @@ impl JobRepository {
                         'details', sj.details,
                         'deadline_at', sj.deadline_at
                     )
+                    ORDER BY sj.created_at ASC
                 ) AS "sub_jobs"
                 FROM sub_jobs sj
                 WHERE sj.job_id = j.id

@@ -8,7 +8,7 @@ use tracing::{debug, error, info};
 use crate::{
     service_repository::Service,
     service_scaler::ServiceScalerRegistry,
-    sub_job_repository::{SubJob, SubJobStatus},
+    sub_job_repository::{SubJob, SubJobStatus, SubJobType},
     Repositories,
 };
 
@@ -60,15 +60,10 @@ async fn process_scaling_created(
 ) -> Result<(), SubJobHandlerError> {
     info!("Processing scaling created type sub job");
 
-    let topic = get_topic(sub_job)?;
-    let services = get_services(repo.clone(), &topic).await?;
-    let workers_online = get_workers_online(repo.clone(), &topic).await?;
-    let service_count = services.len();
-
-    let scale_each_by = MAX_JOB_WORKERS.div_ceil(service_count);
+    let (services, workers_online, workers_count, scale_each_by) =
+        get_services_and_workers(repo.clone(), sub_job).await?;
 
     // Set expected worker count into the job details
-    let workers_count = (scale_each_by * service_count) as i64;
     repo.job
         .update_job_workers_count(&sub_job.job_id, workers_count)
         .await
@@ -81,15 +76,7 @@ async fn process_scaling_created(
         .await
         .map_err(|e| SubJobHandlerError::Skip(e.to_string()))?;
 
-    debug!(
-        "workers_online: {} services: {:?}, scale_each_by: {}, service_count: {}, workers_count: {}, descale_at: {}",
-        workers_online.len(),
-        services.iter().map(|s| &s.id),
-        scale_each_by,
-        service_count,
-        workers_count,
-        descale_at
-    );
+    debug!("Descale deadline set to: {}", descale_at);
 
     // Do not scale if workers are already online
     // Set the sub job status to canceled
@@ -146,21 +133,10 @@ async fn process_scaling_processing(
     info!("Processing scaling processing type sub job");
     check_deadline(sub_job)?;
 
-    let topic = get_topic(sub_job)?;
-    let services = get_services(repo.clone(), &topic).await?;
-    let scale_each_by = MAX_JOB_WORKERS.div_ceil(services.len());
-    let workers_online = get_workers_online(repo.clone(), &topic).await?;
+    let (_, workers_online, workers_count, _) =
+        get_services_and_workers(repo.clone(), sub_job).await?;
 
-    debug!(
-        "workers_online: {}, scale_each_by: {} services: {}",
-        workers_online.len(),
-        scale_each_by,
-        services.len()
-    );
-
-    let workers_count = scale_each_by * services.len();
-
-    if workers_online.len() >= workers_count {
+    if workers_online.len() >= workers_count as usize {
         repo.sub_job
             .update_sub_job_status(&sub_job.id, SubJobStatus::Completed)
             .await
@@ -224,4 +200,54 @@ fn check_deadline(sub_job: &SubJob) -> Result<(), SubJobHandlerError> {
         return Err(SubJobHandlerError::FailedJob("Deadline passed".to_string()));
     }
     Ok(())
+}
+
+pub async fn get_services_and_workers(
+    repo: Arc<Repositories>,
+    sub_job: &SubJob,
+) -> Result<(Vec<Service>, Vec<String>, i64, usize), SubJobHandlerError> {
+    let topic = get_topic(sub_job)?;
+    let services = get_services(repo.clone(), &topic).await?;
+    let workers_online = get_workers_online(repo.clone(), &topic).await?;
+    let service_count = services.len();
+
+    let scale_each_by = MAX_JOB_WORKERS.div_ceil(service_count);
+
+    let workers_count = (scale_each_by * service_count) as i64;
+
+    debug!(
+        "topic: {}, services: {:?}. workers_online: {}, services_count: {}, scale_each_by: {}, workers_count: {}",
+        topic,
+        services.iter().map(|s| &s.id),
+        workers_online.len(),
+        service_count,
+        scale_each_by,
+        workers_count,
+    );
+
+    Ok((services, workers_online, workers_count, scale_each_by))
+}
+
+async fn get_topic_from_scaling_subjob(
+    repo: Arc<Repositories>,
+    sub_job: &SubJob,
+) -> Result<String, SubJobHandlerError> {
+    let scaling_sub_job = repo
+        .sub_job
+        .get_sub_job_by_id_and_type(&sub_job.job_id, SubJobType::Scaling)
+        .await
+        .map_err(|e| SubJobHandlerError::Skip(e.to_string()))?;
+    let topic = get_topic(&scaling_sub_job)?;
+
+    Ok(topic)
+}
+
+pub(super) async fn get_workers_online_by_subjob_topic(
+    repo: Arc<Repositories>,
+    sub_job: &SubJob,
+) -> Result<Vec<String>, SubJobHandlerError> {
+    let topic = get_topic_from_scaling_subjob(repo.clone(), sub_job).await?;
+    let workers_online = get_workers_online(repo.clone(), &topic).await?;
+
+    Ok(workers_online)
 }

@@ -19,7 +19,7 @@ pub enum SubJobStatus {
     Canceled,
 }
 
-#[derive(Deserialize, Serialize, Debug, Type, ToSchema, Clone)]
+#[derive(Deserialize, Serialize, Debug, Type, ToSchema, Clone, PartialEq)]
 #[sqlx(type_name = "sub_job_type")]
 pub enum SubJobType {
     CombinedDHP,
@@ -52,6 +52,35 @@ pub struct WorkerData {
     head: serde_json::Value,
 }
 
+#[derive(Serialize, Default)]
+pub struct SubJobDetails {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub partial: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workers_count: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topic: Option<String>,
+}
+impl SubJobDetails {
+    pub fn empty() -> Self {
+        SubJobDetails {
+            ..Default::default()
+        }
+    }
+    pub fn partial(partial: i64) -> Self {
+        SubJobDetails {
+            partial: Some(partial),
+            ..Default::default()
+        }
+    }
+    pub fn topic(topic: String) -> Self {
+        SubJobDetails {
+            topic: Some(topic),
+            ..Default::default()
+        }
+    }
+}
+
 impl SubJobRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
@@ -63,7 +92,7 @@ impl SubJobRepository {
         job_id: Uuid,
         status: SubJobStatus,
         job_type: SubJobType,
-        details: serde_json::Value,
+        details: SubJobDetails,
     ) -> Result<SubJob, sqlx::Error> {
         let sub_job = sqlx::query_as!(
           SubJob,
@@ -76,7 +105,7 @@ impl SubJobRepository {
             job_id,
             status as SubJobStatus,
             job_type as SubJobType,
-            details,
+            serde_json::to_value(details).unwrap(),
         )
         .fetch_one(&self.pool)
         .await?;
@@ -203,5 +232,46 @@ impl SubJobRepository {
         .await?;
 
         Ok(sub_job)
+    }
+
+    pub async fn get_sub_job_by_id_and_type(
+        &self,
+        job_id: &Uuid,
+        sub_job_type: SubJobType,
+    ) -> Result<SubJob, sqlx::Error> {
+        let sub_job = sqlx::query_as!(
+            SubJob,
+            r#"
+            SELECT id, job_id, status as "status!: SubJobStatus", type as "type!: SubJobType", details, deadline_at
+            FROM sub_jobs
+            WHERE job_id = $1 AND type = $2
+            "#,
+            job_id,
+            sub_job_type as SubJobType,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(sub_job)
+    }
+
+    pub async fn update_sub_job_workers_count(
+        &self,
+        sub_job_id: &Uuid,
+        workers_count: i64,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query!(
+            r#"
+            UPDATE sub_jobs
+            SET details = details || jsonb_build_object('workers_count', $2::bigint)
+            WHERE id = $1
+            "#,
+            sub_job_id,
+            workers_count,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
     }
 }
