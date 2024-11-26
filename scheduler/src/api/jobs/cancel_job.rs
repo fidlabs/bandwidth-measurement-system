@@ -1,11 +1,5 @@
 use std::sync::Arc;
 
-use crate::{
-    api::api_response::{bad_request, ApiResponse, ErrorResponse},
-    job_repository::{JobStatus, JobWithSubJobs},
-    state::AppState,
-    sub_job_repository::SubJobStatus,
-};
 use axum::{
     debug_handler,
     extract::{Path, State},
@@ -15,8 +9,13 @@ use serde::{Deserialize, Serialize};
 use tracing::{error, info};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
+use common::api_response::*;
 
-use crate::api::api_response::*;
+use crate::{
+    job_repository::{JobStatus, JobWithSubJobs},
+    state::AppState,
+    sub_job_repository::SubJobStatus,
+};
 
 #[derive(Deserialize, ToSchema, IntoParams)]
 pub struct CancelJobPathParams {

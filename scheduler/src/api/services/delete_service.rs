@@ -5,12 +5,13 @@ use axum::{
     extract::{Path, State},
 };
 use axum_extra::extract::WithRejection;
+use common::api_response::*;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-use crate::{api::api_response::*, service_repository::Service, state::AppState};
+use crate::{ service_repository::Service, state::AppState};
 
 #[derive(Deserialize, ToSchema, IntoParams)]
 pub struct DeleteServicePathInput {
