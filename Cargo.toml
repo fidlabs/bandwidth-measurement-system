@@ -4,7 +4,6 @@ members = [
     "common", 
     "rabbitmq",
     "scheduler", 
-    "url_finder",
     "worker",
 ]
 
