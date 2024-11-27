@@ -46,7 +46,6 @@ impl DealRepository {
                 AND "providerId" = $1
                 AND "dealId" IS NOT NULL
                 AND "dealId" != 0
-            -- ORDER BY "createdAt" DESC -- THIS SLOWS THE QUERY AS FUCK 
             LIMIT $2
             OFFSET $3
             "#,
