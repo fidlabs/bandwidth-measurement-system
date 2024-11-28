@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use axum::{debug_handler, extract::State};
+use common::api_response::*;
 use serde::Serialize;
 use tracing::error;
 use utoipa::ToSchema;
 
 use crate::{
-    api::api_response::*, service_repository::ServiceWithTopics, service_scaler::ServiceScalerInfo,
-    state::AppState,
+    service_repository::ServiceWithTopics, service_scaler::ServiceScalerInfo, state::AppState,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
