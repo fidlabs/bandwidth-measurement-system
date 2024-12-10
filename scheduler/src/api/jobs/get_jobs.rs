@@ -1,20 +1,16 @@
 use std::sync::Arc;
 
-use crate::{
-    api::api_response::{bad_request, ApiResponse, ErrorResponse},
-    job_repository::JobWithSubJobs,
-    state::AppState,
-};
 use axum::{
     debug_handler,
     extract::{Query, State},
 };
 use axum_extra::extract::WithRejection;
+use common::api_response::*;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 use utoipa::{IntoParams, ToSchema};
 
-use crate::api::api_response::*;
+use crate::{job_repository::JobWithSubJobs, state::AppState};
 
 #[derive(Deserialize, ToSchema, IntoParams)]
 #[into_params(parameter_in = Query)]

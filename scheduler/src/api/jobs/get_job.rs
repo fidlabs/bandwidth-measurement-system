@@ -1,23 +1,20 @@
 use std::sync::Arc;
 
-use crate::{
-    api::api_response::{bad_request, ApiResponse, ErrorResponse},
-    job_repository::JobWithSubJobsWithData,
-    state::AppState,
-    sub_job_repository::SubJobType,
-};
 use axum::{
     debug_handler,
     extract::{Path, State},
 };
 use axum_extra::extract::WithRejection;
+use common::api_response::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{debug, error, info};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-use crate::api::api_response::*;
+use crate::{
+    job_repository::JobWithSubJobsWithData, state::AppState, sub_job_repository::SubJobType,
+};
 
 #[derive(Deserialize, ToSchema, IntoParams)]
 pub struct GetJobPathParams {

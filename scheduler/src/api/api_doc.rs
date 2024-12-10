@@ -1,9 +1,10 @@
+use common::api_response;
 use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
 use utoipa::{Modify, OpenApi};
 
 use crate::{
     api::{
-        api_response, healthcheck,
+        healthcheck,
         jobs::{cancel_job, create_job, get_job, get_jobs},
         services::{
             create_service, delete_service, get_services, services_info, services_scale_down,

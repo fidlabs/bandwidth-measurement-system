@@ -1,14 +1,12 @@
 use std::sync::Arc;
 
 use axum::{debug_handler, extract::State};
+use common::api_response::*;
 use serde::Serialize;
 use tracing::{debug, error};
 use utoipa::ToSchema;
 
-use crate::{
-    api::api_response::*, service_repository::Service, service_scaler::ServiceScalerInfo,
-    state::AppState,
-};
+use crate::{service_repository::Service, service_scaler::ServiceScalerInfo, state::AppState};
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ServiceWithInfo {
