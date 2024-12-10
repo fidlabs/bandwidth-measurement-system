@@ -93,12 +93,11 @@ pub async fn handle_get_job(
         .filter(|sub_job| sub_job.r#type == SubJobType::CombinedDHP)
         .map(|sub_job| {
             let sub_job_download_speed = sub_job.worker_data.iter().map(|wd| {
-                return wd
-                    .download
+                wd.download
                     .get("download_speed")
                     .unwrap_or(&json!(0.0))
                     .as_f64()
-                    .unwrap_or(0.0);
+                    .unwrap_or(0.0)
             });
 
             DownloadSpeed {
