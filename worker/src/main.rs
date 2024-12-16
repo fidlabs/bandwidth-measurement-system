@@ -1,4 +1,4 @@
-use std::{error::Error, sync::Arc};
+use std::error::Error;
 
 use color_eyre::Result;
 use config::CONFIG;

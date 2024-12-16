@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE workers\n            SET\n                last_seen = $2,\n                status = 'online'\n            WHERE worker_name = $1 AND workers.last_seen < $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "01f66465d50408504753ed0de2dc67c1c06d1d821b6043cd5d005936c1287c3f"
+}
