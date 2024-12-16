@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use crate::state::AppState;
 
+#[derive(Clone)]
 pub struct DataConsumer {
     state: Arc<AppState>,
 }
