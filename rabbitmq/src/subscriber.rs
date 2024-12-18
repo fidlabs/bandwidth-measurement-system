@@ -121,10 +121,7 @@ impl Subscriber {
         *chan_lock = Some(channel.clone());
 
         channel
-            .basic_consume(
-                consumer.clone(),
-                BasicConsumeArguments::new(&queue_name, ""),
-            )
+            .basic_consume(consumer.clone(), BasicConsumeArguments::new(queue_name, ""))
             .await?;
 
         info!("Successfully started queue consumer");

@@ -150,3 +150,9 @@ impl ConnectionManager {
         *conn_lock = None;
     }
 }
+
+impl Default for ConnectionManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
