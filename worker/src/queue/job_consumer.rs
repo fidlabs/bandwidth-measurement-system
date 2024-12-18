@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use amqprs::{
     channel::{BasicAckArguments, Channel},
     consumer::AsyncConsumer,
@@ -16,13 +18,14 @@ use crate::{handlers::*, CONFIG};
 
 use super::status_sender::StatusSender;
 
+#[derive(Clone)]
 pub struct JobConsumer {
-    data_queue: Publisher,
+    data_queue: Arc<Publisher>,
     status_sender: StatusSender,
 }
 
 impl JobConsumer {
-    pub fn new(data_queue: Publisher, status_sender: StatusSender) -> Self {
+    pub fn new(data_queue: Arc<Publisher>, status_sender: StatusSender) -> Self {
         Self {
             data_queue,
             status_sender,

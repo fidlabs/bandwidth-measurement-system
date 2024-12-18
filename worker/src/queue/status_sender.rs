@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use chrono::Utc;
 use rabbitmq::{
     Message, Publisher, StatusMessage, WorkerDetails, WorkerStatus, WorkerStatusDetails,
@@ -8,11 +10,11 @@ use crate::CONFIG;
 
 #[derive(Clone)]
 pub struct StatusSender {
-    status_queue: Publisher,
+    status_queue: Arc<Publisher>,
 }
 
 impl StatusSender {
-    pub fn new(status_queue: Publisher) -> Self {
+    pub fn new(status_queue: Arc<Publisher>) -> Self {
         StatusSender { status_queue }
     }
 

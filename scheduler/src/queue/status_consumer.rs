@@ -12,6 +12,7 @@ use rabbitmq::{Message, StatusMessage, WorkerStatus, WorkerStatusDetails};
 use serde_json;
 use tracing::{debug, error, info};
 
+#[derive(Clone)]
 pub struct StatusConsumer {
     state: Arc<AppState>,
 }

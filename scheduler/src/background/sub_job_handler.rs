@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use rabbitmq::Publisher;
-use tokio::{
-    sync::Mutex,
-    time::{sleep, Duration},
-};
+use tokio::time::{sleep, Duration};
 use tracing::{debug, error, info};
 
 use crate::{
@@ -25,7 +22,7 @@ pub(super) enum SubJobHandlerError {
 
 pub async fn sub_job_handler(
     repo: Arc<Repositories>,
-    job_queue: Arc<Mutex<Publisher>>,
+    job_queue: Arc<Publisher>,
     service_scaler_registry: Arc<ServiceScalerRegistry>,
 ) {
     info!("Starting sub job handler");
@@ -39,11 +36,17 @@ pub async fn sub_job_handler(
 
         let sub_job = match repo.sub_job.get_first_unfinished_sub_job().await {
             Ok(sub_job) => sub_job,
+            Err(sqlx::Error::RowNotFound) => {
+                debug!("No unfinished sub jobs found");
+                continue;
+            }
             Err(e) => {
-                debug!("get_first_unfinished_sub_job error: {}", e);
+                error!("get_first_unfinished_sub_job error: {}", e);
                 continue;
             }
         };
+
+        debug!("Found sub job: {:?}", sub_job);
 
         let _ = match sub_job.r#type {
             SubJobType::CombinedDHP => {

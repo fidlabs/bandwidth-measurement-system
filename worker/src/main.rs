@@ -8,7 +8,7 @@ use tokio::{
     signal::unix::{signal, SignalKind},
     time::{interval, Duration},
 };
-use tracing::{error, info};
+use tracing::{debug, error, info};
 use tracing_subscriber::EnvFilter;
 
 mod config;
@@ -41,30 +41,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
     );
 
     // Initialize RabbitMQ connection
-    let rabbit_connection = rabbitmq::get_connection().await?;
-    info!("Successfully connected to RabbitMQ");
+    let rabbit_connection_manager = start_connection_manager().await;
 
-    let mut job_queue = Subscriber::new(get_subscriber_config(SubscriberType::JobSubscriber));
-    job_queue.set_queue_name(CONFIG.worker_name.as_str());
-    job_queue.set_routing_keys(
-        CONFIG
-            .worker_topics
-            .iter()
-            .map(|s| s.as_str())
-            .collect::<Vec<&str>>(),
+    // Initialize data queue publisher
+    let data_queue_publisher = start_publisher(
+        get_publisher_config(PublisherType::ResultPublisher),
+        rabbit_connection_manager.clone(),
     );
-    job_queue.setup(rabbit_connection.clone()).await?;
-    info!("Successfully set up job queue");
 
-    let mut data_queue = Publisher::new(get_publisher_config(PublisherType::ResultPublisher));
-    data_queue.setup(rabbit_connection.clone()).await?;
-    info!("Successfully set up data queue");
+    // Initalize status queue publisher
+    let status_queue_publisher = start_publisher(
+        get_publisher_config(PublisherType::StatusPublisher),
+        rabbit_connection_manager.clone(),
+    );
 
-    let mut status_queue = Publisher::new(get_publisher_config(PublisherType::StatusPublisher));
-    status_queue.setup(rabbit_connection.clone()).await?;
-    info!("Successfully set up status queue");
-    let status_sender = StatusSender::new(status_queue.clone());
-
+    let status_sender = StatusSender::new(status_queue_publisher.clone());
+    // Send online status to scheduler
     status_sender
         .send_lifecycle_status(WorkerStatus::Online)
         .await?;
@@ -72,9 +64,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Spawn the background task to send heartbeat status
     tokio::spawn(send_heartbeat_status(status_sender.clone()));
 
-    let consumer = JobConsumer::new(data_queue.clone(), status_sender.clone());
-    job_queue.subscribe(consumer).await?;
-    info!("Successfully started job queue consumer");
+    let job_queue_subscriber = start_subscriber(
+        get_subscriber_config(SubscriberType::JobSubscriber),
+        rabbit_connection_manager.clone(),
+        JobConsumer::new(data_queue_publisher.clone(), status_sender.clone()),
+        Some(CONFIG.worker_name.as_str()),
+        Some(
+            CONFIG
+                .worker_topics
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<&str>>(),
+        ),
+    );
 
     let mut sigint = signal(SignalKind::interrupt())?;
     let mut sigterm = signal(SignalKind::terminate())?;
@@ -100,10 +102,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // TODO: maybe lookup tokio::sync::Notify for this
 
     // Close the connection gracefully
-    job_queue.close().await?;
-    data_queue.close().await?;
-    status_queue.close().await?;
-    rabbit_connection.lock().await.clone().close().await?;
+    job_queue_subscriber.close_channel().await;
+    data_queue_publisher.close_channel().await;
+    status_queue_publisher.close_channel().await;
+    rabbit_connection_manager.close_connection().await;
 
     info!("Worker shut down gracefully");
 
@@ -112,12 +114,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 /// Sends heartbeat status to scheduler every interval
 async fn send_heartbeat_status(status_sender: StatusSender) {
+    debug!("Starting heartbeat status sender...");
     let interval_secs: u64 = CONFIG.heartbeat_interval_sec;
 
     let mut interval = interval(Duration::from_secs(interval_secs));
 
     loop {
         interval.tick().await;
+        debug!("Sending heartbeat status...");
         if let Err(e) = status_sender.send_heartbeat_status().await {
             error!("Error sending heartbeat status: {}", e);
         }

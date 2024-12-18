@@ -17,7 +17,6 @@ use state::AppState;
 use tokio::{
     net::TcpListener,
     signal::unix::{signal, SignalKind},
-    sync::Mutex,
 };
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
@@ -65,18 +64,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     info!("Connecting to RabbitMQ...");
     // Initialize RabbitMQ connection
-    let rabbit_connection = rabbitmq::get_connection().await?;
-    info!("Successfully connected to RabbitMQ");
+    let rabbit_connection_manager = start_connection_manager().await;
 
-    let job_queue = Arc::new(Mutex::new(Publisher::new(get_publisher_config(
-        PublisherType::JobPublisher,
-    ))));
-    job_queue
-        .lock()
-        .await
-        .setup(rabbit_connection.clone())
-        .await?;
-    info!("Successfully set up job queue");
+    // Initialize job queue publisher
+    let job_queue_publisher = start_publisher(
+        get_publisher_config(PublisherType::JobPublisher),
+        rabbit_connection_manager.clone(),
+    );
 
     // Initialize repositories
     let repo = Arc::new(Repositories::new(pool.clone()));
@@ -87,9 +81,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Initialize app state
     let app_state = Arc::new(AppState::new(repo.clone(), service_scaler_registry.clone()));
 
+    // Backgroud processes
     tokio::spawn(sub_job_handler(
         repo.clone(),
-        job_queue.clone(),
+        job_queue_publisher.clone(),
         service_scaler_registry.clone(),
     ));
     tokio::spawn(service_descaler_handler(
@@ -98,27 +93,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
     ));
     tokio::spawn(process_worker_online_check(repo.clone()));
 
-    let mut data_queue = Subscriber::new(get_subscriber_config(SubscriberType::ResultSubscriber));
-    data_queue.setup(rabbit_connection.clone()).await?;
-    info!("Successfully set up data queue");
-
-    let data_consumer = DataConsumer::new(app_state.clone());
-    data_queue.subscribe(data_consumer).await?;
-    info!("Successfully started data queue consumer");
-
-    let mut status_queue = Subscriber::new(get_subscriber_config(SubscriberType::StatusSubscriber));
-    status_queue.setup(rabbit_connection.clone()).await?;
-    let status_consumer = StatusConsumer::new(app_state.clone());
-    status_queue.subscribe(status_consumer).await?;
-    info!("Successfully started status queue consumer");
+    // Start the data queue subscriber
+    let data_queue_subscriber = start_subscriber(
+        get_subscriber_config(SubscriberType::ResultSubscriber),
+        rabbit_connection_manager.clone(),
+        DataConsumer::new(Arc::clone(&app_state)),
+        None,
+        None,
+    );
+    // Start the status queue subscriber
+    let status_queue_subscriber = start_subscriber(
+        get_subscriber_config(SubscriberType::StatusSubscriber),
+        rabbit_connection_manager.clone(),
+        StatusConsumer::new(Arc::clone(&app_state)),
+        None,
+        None,
+    );
 
     let app = Router::new()
         .merge(routes::create_routes())
         .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", ApiDoc::openapi()))
-        .layer(
-            ServiceBuilder::new().layer(TraceLayer::new_for_http()),
-            // TODO: add something to authenticate requests
-        )
+        .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()))
         .with_state(app_state.clone());
 
     let server_addr = "0.0.0.0:3000".to_string();
@@ -135,10 +130,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // TODO: maybe lookup tokio::sync::Notify for this
 
     // Close the connection gracefully
-    job_queue.lock().await.clone().close().await?;
-    data_queue.close().await?;
-    status_queue.close().await?;
-    rabbit_connection.lock().await.clone().close().await?;
+    job_queue_publisher.close_channel().await;
+    data_queue_subscriber.close_channel().await;
+    status_queue_subscriber.close_channel().await;
+    rabbit_connection_manager.close_connection().await;
 
     info!("Scheduler shut down gracefully");
 
