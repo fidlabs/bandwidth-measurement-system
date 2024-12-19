@@ -111,6 +111,7 @@ pub async fn handle_create_job(
 
     let sub_jobs = vec![
         scaling_sub_job,
+        create_sub_job(&state, &job, SubJobDetails::partial(1)).await?,
         create_sub_job(&state, &job, SubJobDetails::partial(80)).await?,
         create_sub_job(&state, &job, SubJobDetails::empty()).await?,
     ];
