@@ -8,7 +8,7 @@ use tracing::{debug, error, info};
 use crate::{
     service_repository::Service,
     service_scaler::ServiceScalerRegistry,
-    sub_job_repository::{SubJob, SubJobStatus, SubJobType},
+    sub_job_repository::{SubJobStatus, SubJobType, SubJobWithJob},
     Repositories,
 };
 
@@ -16,12 +16,11 @@ use super::sub_job_handler::SubJobHandlerError;
 
 const SERVICE_DESCALE_AT_DEADLINE_SEC: u64 = 1800; // 0.5h
 const SCALING_SUB_JOB_DEADLINE_SEC: u64 = SERVICE_DESCALE_AT_DEADLINE_SEC - 300; // 5 minutes before service deadline
-const MAX_JOB_WORKERS: usize = 10;
 
 pub(super) async fn process_scaling(
     repo: Arc<Repositories>,
     service_scaler_registry: Arc<ServiceScalerRegistry>,
-    sub_job: SubJob,
+    sub_job: SubJobWithJob,
 ) -> Result<()> {
     let result = match sub_job.status {
         SubJobStatus::Created => {
@@ -56,7 +55,7 @@ pub(super) async fn process_scaling(
 async fn process_scaling_created(
     repo: Arc<Repositories>,
     service_scaler_registry: Arc<ServiceScalerRegistry>,
-    sub_job: &SubJob,
+    sub_job: &SubJobWithJob,
 ) -> Result<(), SubJobHandlerError> {
     info!("Processing scaling created type sub job");
 
@@ -80,7 +79,7 @@ async fn process_scaling_created(
 
     // Do not scale if workers are already online
     // Set the sub job status to canceled
-    if workers_online.len() >= workers_count as usize {
+    if workers_online.len() >= workers_count {
         repo.sub_job
             .update_sub_job_status(&sub_job.id, SubJobStatus::Canceled)
             .await
@@ -117,7 +116,7 @@ async fn process_scaling_created(
 }
 
 #[tracing::instrument(skip( sub_job), fields(sub_job_id = %sub_job.id))]
-async fn process_scaling_pending(sub_job: &SubJob) -> Result<(), SubJobHandlerError> {
+async fn process_scaling_pending(sub_job: &SubJobWithJob) -> Result<(), SubJobHandlerError> {
     error!("Processing scaling pending type sub job");
 
     Err(SubJobHandlerError::FailedJob(
@@ -128,7 +127,7 @@ async fn process_scaling_pending(sub_job: &SubJob) -> Result<(), SubJobHandlerEr
 #[tracing::instrument(skip(repo, sub_job), fields(sub_job_id = %sub_job.id))]
 async fn process_scaling_processing(
     repo: Arc<Repositories>,
-    sub_job: &SubJob,
+    sub_job: &SubJobWithJob,
 ) -> Result<(), SubJobHandlerError> {
     info!("Processing scaling processing type sub job");
     check_deadline(sub_job)?;
@@ -136,7 +135,7 @@ async fn process_scaling_processing(
     let (_, workers_online, workers_count, _) =
         get_services_and_workers(repo.clone(), sub_job).await?;
 
-    if workers_online.len() >= workers_count as usize {
+    if workers_online.len() >= workers_count {
         repo.sub_job
             .update_sub_job_status(&sub_job.id, SubJobStatus::Completed)
             .await
@@ -146,7 +145,7 @@ async fn process_scaling_processing(
     Ok(())
 }
 
-fn get_topic(sub_job: &SubJob) -> Result<String, SubJobHandlerError> {
+fn get_topic(sub_job: &SubJobWithJob) -> Result<String, SubJobHandlerError> {
     let topic = sub_job
         .details
         .get("topic")
@@ -191,7 +190,7 @@ async fn get_workers_online(
     Ok(workers)
 }
 
-fn check_deadline(sub_job: &SubJob) -> Result<(), SubJobHandlerError> {
+fn check_deadline(sub_job: &SubJobWithJob) -> Result<(), SubJobHandlerError> {
     let deadline = sub_job
         .deadline_at
         .ok_or(SubJobHandlerError::FailedJob("No deadline".to_string()))?;
@@ -204,16 +203,20 @@ fn check_deadline(sub_job: &SubJob) -> Result<(), SubJobHandlerError> {
 
 pub async fn get_services_and_workers(
     repo: Arc<Repositories>,
-    sub_job: &SubJob,
-) -> Result<(Vec<Service>, Vec<String>, i64, usize), SubJobHandlerError> {
+    sub_job: &SubJobWithJob,
+) -> Result<(Vec<Service>, Vec<String>, usize, usize), SubJobHandlerError> {
     let topic = get_topic(sub_job)?;
     let services = get_services(repo.clone(), &topic).await?;
     let workers_online = get_workers_online(repo.clone(), &topic).await?;
     let service_count = services.len();
 
-    let scale_each_by = MAX_JOB_WORKERS.div_ceil(service_count);
+    let target_worker_count =
+        sub_job.job.details.target_worker_count.ok_or_else(|| {
+            SubJobHandlerError::FailedJob("missing target worker count".to_string())
+        })? as usize;
 
-    let workers_count = (scale_each_by * service_count) as i64;
+    let scale_each_by = target_worker_count.div_ceil(service_count);
+    let workers_count = scale_each_by * service_count;
 
     debug!(
         "topic: {}, services: {:?}. workers_online: {}, services_count: {}, scale_each_by: {}, workers_count: {}",
@@ -230,7 +233,7 @@ pub async fn get_services_and_workers(
 
 async fn get_topic_from_scaling_subjob(
     repo: Arc<Repositories>,
-    sub_job: &SubJob,
+    sub_job: &SubJobWithJob,
 ) -> Result<String, SubJobHandlerError> {
     let scaling_sub_job = repo
         .sub_job
@@ -244,7 +247,7 @@ async fn get_topic_from_scaling_subjob(
 
 pub(super) async fn get_workers_online_by_subjob_topic(
     repo: Arc<Repositories>,
-    sub_job: &SubJob,
+    sub_job: &SubJobWithJob,
 ) -> Result<Vec<String>, SubJobHandlerError> {
     let topic = get_topic_from_scaling_subjob(repo.clone(), sub_job).await?;
     let workers_online = get_workers_online(repo.clone(), &topic).await?;

@@ -7,7 +7,6 @@ use color_eyre::Result;
 use rand::Rng;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::sync::Arc;
 use tracing::{debug, info};
 use url::Url;
@@ -16,7 +15,7 @@ use uuid::Uuid;
 
 use crate::{
     api::api_response::*,
-    job_repository::{Job, JobStatus},
+    job_repository::{Job, JobDetails, JobStatus},
     state::AppState,
     sub_job_repository::{SubJob, SubJobDetails, SubJobStatus, SubJobType},
 };
@@ -29,6 +28,10 @@ pub struct CreateJobInput {
     pub url: String,
     #[schema(example = "us_east")]
     pub routing_key: String,
+    #[schema(minimum = 1, maximum = 40)]
+    pub worker_count: Option<i64>,
+    pub entity: Option<String>,
+    pub note: Option<String>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -74,6 +77,8 @@ pub async fn handle_create_job(
     let url = validate_url(&payload)?;
     validate_routing_key(&payload)?;
 
+    let target_worker_count = payload.worker_count.unwrap_or(10).clamp(1, 40);
+
     // Create the job
     let (start_range, end_range) = get_file_range_for_file(url.as_ref()).await?;
     let job_id = Uuid::new_v4();
@@ -86,10 +91,13 @@ pub async fn handle_create_job(
             url.to_string(),
             &payload.routing_key,
             JobStatus::Pending,
-            json!({
-                "start_range": start_range,
-                "end_range": end_range,
-            }),
+            JobDetails::new(
+                start_range,
+                end_range,
+                target_worker_count,
+                payload.entity.clone(),
+                payload.note.clone(),
+            ),
         )
         .await
         .map_err(|_| internal_server_error("Failed to create job"))?;
@@ -143,7 +151,7 @@ fn validate_routing_key(payload: &CreateJobInput) -> Result<(), ApiResponse<()>>
 }
 
 /// Get a random range of 100MB from the file using HEAD request
-async fn get_file_range_for_file(url: &str) -> Result<(u64, u64), ApiResponse<()>> {
+async fn get_file_range_for_file(url: &str) -> Result<(i64, i64), ApiResponse<()>> {
     let response = Client::new()
         .head(url)
         .send()
@@ -159,7 +167,7 @@ async fn get_file_range_for_file(url: &str) -> Result<(u64, u64), ApiResponse<()
         .ok_or_else(|| bad_request("Content-Length header is missing in the response"))?
         .to_str()
         .map_err(|e| bad_request(format!("Failed to parse Content-Length header: {}", e)))?
-        .parse::<u64>()
+        .parse::<i64>()
         .map_err(|e| bad_request(format!("Failed to parse Content-Length header: {}", e)))?;
 
     debug!("Content-Length: {:?}", content_length);
