@@ -12,8 +12,12 @@ RUN apt-get update && \
 RUN curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
 RUN add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
 RUN apt-get update && \
-    apt-get install -y docker-ce-cli && \
+    apt-get install -y --fix-missing docker-ce-cli && \
     rm -rf /var/lib/apt/lists/*
+
+RUN rustup toolchain install stable
+RUN rustup component add clippy --toolchain stable
+ENV RUSTUP_NO_UPDATE_CHECK=1
 
 # install cargo-watch for automatic recompilation
 RUN cargo install cargo-watch
@@ -21,6 +25,7 @@ RUN cargo install cargo-watch
 # copy cargo files for caching
 COPY Cargo.toml Cargo.lock ./
 COPY scheduler/Cargo.toml ./scheduler/
+COPY url_finder/Cargo.toml ./url_finder/
 COPY worker/Cargo.toml ./worker/
 COPY rabbitmq/Cargo.toml ./rabbitmq/
 

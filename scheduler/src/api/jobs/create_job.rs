@@ -4,6 +4,7 @@ use axum::{
 };
 use axum_extra::extract::WithRejection;
 use color_eyre::Result;
+use common::api_response::*;
 use rand::Rng;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -14,7 +15,6 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    api::api_response::*,
     job_repository::{Job, JobDetails, JobStatus},
     state::AppState,
     sub_job_repository::{SubJob, SubJobDetails, SubJobStatus, SubJobType},

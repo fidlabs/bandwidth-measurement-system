@@ -5,12 +5,12 @@ use axum::{
     extract::{Json, State},
 };
 use axum_extra::extract::WithRejection;
+use common::api_response::*;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 use utoipa::ToSchema;
 
 use crate::{
-    api::api_response::*,
     service_repository::{ProviderType, Service},
     state::AppState,
 };

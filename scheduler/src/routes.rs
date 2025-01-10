@@ -7,12 +7,10 @@ use axum::{
     routing::{delete, get, post, put},
     Router,
 };
+use common::api_response::*;
 
 use crate::{
-    api::{
-        api_response::{unauthorized, ApiResponse},
-        healthcheck, jobs, services,
-    },
+    api::{healthcheck, jobs, services},
     config::CONFIG,
     state::AppState,
 };

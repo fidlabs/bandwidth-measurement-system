@@ -1,14 +1,17 @@
-use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Json, Response};
+use axum::{
+    extract::rejection::{JsonRejection, PathRejection, QueryRejection},
+    http::StatusCode,
+    response::{IntoResponse, Json, Response},
+};
 use serde::Serialize;
 use utoipa::ToSchema;
 
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, ToSchema, Clone)]
 pub struct ErrorResponse {
     error: String,
 }
 
+#[derive(Clone)]
 pub enum ApiResponse<T> {
     BadRequest(Json<ErrorResponse>),
     InternalServerError(Json<ErrorResponse>),
