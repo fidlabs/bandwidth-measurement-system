@@ -6,12 +6,11 @@ use color_eyre::{
     Result,
 };
 use rabbitmq::{JobMessage, Message, Publisher};
-use tokio::sync::Mutex;
 use tracing::{debug, error};
 
 use crate::{
-    job_repository::{Job, JobStatus},
-    sub_job_repository::{SubJob, SubJobStatus, SubJobType},
+    job_repository::JobStatus,
+    sub_job_repository::{SubJobStatus, SubJobType, SubJobWithJob},
     Repositories,
 };
 
@@ -26,13 +25,14 @@ const SYNC_DELAY_SECS: i64 = 1;
 /// Process the sub job with type CombinedDHP
 pub(super) async fn process_combined_dhp_type(
     repo: Arc<Repositories>,
-    job_queue: Arc<Mutex<Publisher>>,
-    job: Job,
-    sub_job: SubJob,
+    job_queue: Arc<Publisher>,
+    sub_job: SubJobWithJob,
 ) -> Result<()> {
+    debug!("Processing CombinedDHP sub job: {:?}", sub_job.id);
+
     let result = match sub_job.status {
         SubJobStatus::Created => {
-            process_status_created(repo.clone(), job_queue.clone(), job, &sub_job).await
+            process_status_created(repo.clone(), job_queue.clone(), &sub_job).await
         }
         SubJobStatus::Pending => process_status_pending(&sub_job).await,
         SubJobStatus::Processing => process_status_processing(repo.clone(), &sub_job).await,
@@ -60,9 +60,8 @@ pub(super) async fn process_combined_dhp_type(
 
 async fn process_status_created(
     repo: Arc<Repositories>,
-    job_queue: Arc<Mutex<Publisher>>,
-    job: Job,
-    sub_job: &SubJob,
+    job_queue: Arc<Publisher>,
+    sub_job: &SubJobWithJob,
 ) -> Result<(), SubJobHandlerError> {
     // Calculate the start time for the sub jobs
     let start_time = Utc::now() + Duration::seconds(SYNC_DELAY_SECS);
@@ -71,10 +70,18 @@ async fn process_status_created(
     let workers_online = get_workers_online_by_subjob_topic(repo.clone(), sub_job).await?;
     let workers_online_total_count = workers_online.len() as i64;
 
+    if workers_online_total_count == 0 {
+        error!("No workers online for sub job: {}", sub_job.id);
+
+        return Err(SubJobHandlerError::FailedJob(
+            "No workers online".to_string(),
+        ));
+    }
+
     let (excluded_workers, workers_count) = match get_excluded_workers(sub_job, workers_online) {
         Ok((excluded_workers, workers_count)) => (excluded_workers, workers_count),
         Err(e) => {
-            error!("Failed to get excluded workers: {}", e);
+            debug!("Failed to get excluded workers: {}", e);
 
             (vec![], workers_online_total_count)
         }
@@ -84,6 +91,8 @@ async fn process_status_created(
         .update_sub_job_workers_count(&sub_job.id, workers_count)
         .await
         .map_err(|e| SubJobHandlerError::Skip(e.to_string()))?;
+
+    let job = &sub_job.job;
 
     let job_message = Message::WorkerJob {
         job_id: job.id,
@@ -102,8 +111,6 @@ async fn process_status_created(
     debug!("Publishing job message: {:?}", job_message);
 
     job_queue
-        .lock()
-        .await
         .publish(&job_message, &job.routing_key)
         .await
         .inspect_err(|e| error!("Failed to publish job message: {}", e))
@@ -122,7 +129,7 @@ async fn process_status_created(
 }
 
 /// Sub jobs with status pending has been sent to the worker
-async fn process_status_pending(sub_job: &SubJob) -> Result<(), SubJobHandlerError> {
+async fn process_status_pending(sub_job: &SubJobWithJob) -> Result<(), SubJobHandlerError> {
     check_deadline(sub_job)?;
 
     Ok(())
@@ -131,7 +138,7 @@ async fn process_status_pending(sub_job: &SubJob) -> Result<(), SubJobHandlerErr
 // Sub jobs with status processing is started by a worker and is waiting for the data
 async fn process_status_processing(
     repo: Arc<Repositories>,
-    sub_job: &SubJob,
+    sub_job: &SubJobWithJob,
 ) -> Result<(), SubJobHandlerError> {
     check_deadline(sub_job)?;
 
@@ -181,7 +188,7 @@ async fn process_status_processing(
     Ok(())
 }
 
-fn check_deadline(sub_job: &SubJob) -> Result<(), SubJobHandlerError> {
+fn check_deadline(sub_job: &SubJobWithJob) -> Result<(), SubJobHandlerError> {
     let deadline = sub_job
         .deadline_at
         .ok_or(SubJobHandlerError::FailedJob("No deadline".to_string()))?;
@@ -193,7 +200,7 @@ fn check_deadline(sub_job: &SubJob) -> Result<(), SubJobHandlerError> {
 }
 
 fn get_excluded_workers(
-    sub_job: &SubJob,
+    sub_job: &SubJobWithJob,
     workers_online: Vec<String>,
 ) -> Result<(Vec<String>, i64)> {
     let partial = sub_job.details["partial"]

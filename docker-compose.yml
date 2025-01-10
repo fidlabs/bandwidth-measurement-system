@@ -94,6 +94,7 @@ services:
     # exec is required to capture SIGTERM signal
     command: sh -c 'export WORKER_NAME=$(hostname) && exec cargo watch --poll -x "run --bin worker"'
     environment:
+      - LOG_LEVEL=trace
       - WORKER_TOPICS=all,europe,poland,rzeszow
       - RABBITMQ_ENDPOINT=amqp://rabbitmq
       - RABBITMQ_PORT=5672
@@ -123,6 +124,7 @@ services:
     # exec is required to capture SIGTERM signal
     command: sh -c 'export WORKER_NAME=$(hostname) && exec cargo watch --poll -x "run --bin worker"'
     environment:
+      - LOG_LEVEL=trace
       - WORKER_TOPICS=all,usa,california,los_angeles
       - RABBITMQ_ENDPOINT=amqp://rabbitmq
       - RABBITMQ_PORT=5672
@@ -152,6 +154,7 @@ services:
     # exec is required to capture SIGTERM signal
     command: sh -c 'export WORKER_NAME=$(hostname) && exec cargo watch --poll -x "run --bin worker"'
     environment:
+      - LOG_LEVEL=trace
       - WORKER_TOPICS=all,europe,spain,alicante
       - RABBITMQ_ENDPOINT=amqp://rabbitmq
       - RABBITMQ_PORT=5672

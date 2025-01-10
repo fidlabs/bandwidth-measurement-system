@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, job_id, status as \"status!: SubJobStatus\", type as \"type!: SubJobType\", details, deadline_at\n            FROM sub_jobs\n            WHERE status = 'Created' OR status = 'Pending' OR status = 'Processing' \n            ORDER BY created_at ASC\n            LIMIT 1\n            ",
+  "query": "\n            SELECT\n                sj.id,\n                sj.job_id,\n                sj.status as \"status!: SubJobStatus\",\n                sj.type as \"type!: SubJobType\",\n                sj.details,\n                sj.deadline_at,\n                JSON_BUILD_OBJECT(\n                    'id', j.id,\n                    'url', j.url,\n                    'routing_key', j.routing_key,\n                    'status', j.status,\n                    'details', j.details\n                ) AS \"job!: Json<Job>\"\n            FROM sub_jobs sj\n            JOIN jobs j ON sj.job_id = j.id\n            WHERE \n                sj.status IN ('Created', 'Pending', 'Processing')\n            ORDER BY sj.created_at ASC\n            LIMIT 1\n            ",
   "describe": {
     "columns": [
       {
@@ -56,6 +56,11 @@
         "ordinal": 5,
         "name": "deadline_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "job!: Json<Job>",
+        "type_info": "Json"
       }
     ],
     "parameters": {
@@ -67,8 +72,9 @@
       false,
       false,
       false,
-      true
+      true,
+      null
     ]
   },
-  "hash": "4913787b645aaea2956d4a01ba4e2757d89b860a12ff7282e6d51214c30171f4"
+  "hash": "9d286ed826e754e752bfa63b17d0f39b680e9b693aca901145255c69357fc188"
 }

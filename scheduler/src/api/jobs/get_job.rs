@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::{
     debug_handler,
-    extract::{Path, State},
+    extract::{Path, Query, State},
 };
 use axum_extra::extract::WithRejection;
 use common::api_response::*;
@@ -19,6 +19,12 @@ use crate::{
 #[derive(Deserialize, ToSchema, IntoParams)]
 pub struct GetJobPathParams {
     job_id: Uuid,
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct GetJobQueryParams {
+    #[schema(example = "false")]
+    pub extended: Option<bool>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -59,20 +65,19 @@ pub struct JobSummary {
 )]
 #[debug_handler]
 pub async fn handle_get_job(
-    WithRejection(Path(params), _): WithRejection<
-        Path<GetJobPathParams>,
-        ApiResponse<ErrorResponse>,
-    >,
+    WithRejection(Path(path), _): WithRejection<Path<GetJobPathParams>, ApiResponse<ErrorResponse>>,
+    Query(query): Query<GetJobQueryParams>,
     State(state): State<Arc<AppState>>,
 ) -> Result<ApiResponse<GetJobResponse>, ApiResponse<()>> {
-    let job_id = params.job_id;
+    let job_id = path.job_id;
+    let extended = query.extended.unwrap_or(false);
 
     info!("Getting data for job_id: {}", job_id);
 
     let job = state
         .repo
         .job
-        .get_job_by_id_with_subjobs_and_data(job_id)
+        .get_job_by_id_with_subjobs_and_data(job_id, extended)
         .await
         .map_err(|e| match e {
             sqlx::Error::RowNotFound => not_found("Job data not found"),
@@ -90,12 +95,11 @@ pub async fn handle_get_job(
         .filter(|sub_job| sub_job.r#type == SubJobType::CombinedDHP)
         .map(|sub_job| {
             let sub_job_download_speed = sub_job.worker_data.iter().map(|wd| {
-                return wd
-                    .download
+                wd.download
                     .get("download_speed")
                     .unwrap_or(&json!(0.0))
                     .as_f64()
-                    .unwrap_or(0.0);
+                    .unwrap_or(0.0)
             });
 
             DownloadSpeed {

@@ -85,7 +85,8 @@ impl WorkerRepository {
             r#"
             UPDATE workers
             SET
-                last_seen = $2
+                last_seen = $2,
+                status = 'online'
             WHERE worker_name = $1 AND workers.last_seen < $2
             "#,
             worker_name,

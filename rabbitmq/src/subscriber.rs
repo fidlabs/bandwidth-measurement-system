@@ -1,28 +1,58 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use amqprs::{
     channel::{
         BasicConsumeArguments, Channel, ExchangeDeclareArguments, QueueBindArguments,
         QueueDeclareArguments,
     },
-    connection::Connection,
     consumer::AsyncConsumer,
 };
-use color_eyre::Result;
-use tokio::sync::Mutex;
+use color_eyre::{eyre::eyre, Result};
+use tokio::{sync::Mutex, time::sleep};
+use tracing::{debug, error, info, instrument};
 
-use crate::config::SubscriberConfig;
+use crate::{config::SubscriberConfig, ConnectionManager};
+
+/// spawn a subscriber task
+pub fn start_subscriber<C>(
+    config: SubscriberConfig,
+    connection_manager: Arc<ConnectionManager>,
+    consumer: C,
+    queue_name: Option<&'static str>,
+    routing_keys: Option<Vec<&'static str>>,
+) -> Arc<Subscriber>
+where
+    C: AsyncConsumer + Send + Sync + Clone + 'static,
+{
+    let mut subscriber = Subscriber::new(config, connection_manager);
+    if let Some(queue_name) = queue_name {
+        subscriber.set_queue_name(queue_name);
+    }
+    if let Some(routing_keys) = routing_keys {
+        subscriber.set_routing_keys(routing_keys);
+    }
+    let subscriber = Arc::new(subscriber);
+    let subscriber_clone = subscriber.clone();
+
+    tokio::spawn(async move {
+        subscriber_clone.run(consumer).await;
+    });
+
+    subscriber
+}
 
 pub struct Subscriber {
-    channel: Option<Channel>,
     config: SubscriberConfig,
+    connection_manager: Arc<ConnectionManager>,
+    channel: Arc<Mutex<Option<Channel>>>,
 }
 
 impl Subscriber {
-    pub fn new(config: SubscriberConfig) -> Self {
+    pub fn new(config: SubscriberConfig, connection_manager: Arc<ConnectionManager>) -> Self {
         Self {
-            channel: None,
             config,
+            connection_manager,
+            channel: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -34,10 +64,23 @@ impl Subscriber {
         self.config.routing_keys = Some(routing_keys);
     }
 
-    pub async fn setup(&mut self, connection: Arc<Mutex<Connection>>) -> Result<()> {
-        let connection = connection.lock().await;
-        let channel = connection.open_channel(None).await?;
+    #[instrument(skip(self, consumer), fields(exchange_name = %self.config.exchange_config.exchange_name, queue_name = ?self.config.queue_name))]
+    async fn setup<C>(&self, consumer: C) -> Result<()>
+    where
+        C: AsyncConsumer + Send + Sync + Clone + 'static,
+    {
+        let connection = self
+            .connection_manager
+            .get_connection()
+            .await
+            .ok_or(eyre!("no connection"))?;
 
+        let mut chan_lock = self.channel.lock().await;
+        if chan_lock.is_some() && chan_lock.as_ref().unwrap().is_open() {
+            return Ok(());
+        }
+
+        let channel = connection.open_channel(None).await?;
         channel
             .exchange_declare(
                 ExchangeDeclareArguments::new(
@@ -59,9 +102,9 @@ impl Subscriber {
             .expect("Routing keys must be set");
 
         let queue_args = if self.config.durable {
-            QueueDeclareArguments::durable_client_named(self.config.queue_name.unwrap())
+            QueueDeclareArguments::durable_client_named(queue_name)
         } else {
-            QueueDeclareArguments::transient_autodelete(self.config.queue_name.unwrap())
+            QueueDeclareArguments::transient_autodelete(queue_name)
         };
         channel.queue_declare(queue_args).await?;
 
@@ -75,31 +118,40 @@ impl Subscriber {
                 .await?;
         }
 
-        self.channel = Some(channel);
-        Ok(())
-    }
+        *chan_lock = Some(channel.clone());
 
-    pub async fn subscribe<C>(&self, consumer: C) -> Result<(), Box<dyn std::error::Error>>
-    where
-        C: AsyncConsumer + Send + Sync + 'static,
-    {
-        let queue_name = self.config.queue_name.expect("Queue name must be set");
-        let args = BasicConsumeArguments::new(queue_name, "");
-
-        self.channel
-            .as_ref()
-            .ok_or("Channel not initialized")?
-            .basic_consume(consumer, args)
+        channel
+            .basic_consume(consumer.clone(), BasicConsumeArguments::new(queue_name, ""))
             .await?;
 
+        info!("Successfully started queue consumer");
+
         Ok(())
     }
 
-    pub async fn close(&mut self) -> Result<()> {
-        if let Some(channel) = self.channel.take() {
-            channel.close().await?;
+    #[instrument(skip(self, consumer), fields(exchange_name = %self.config.exchange_config.exchange_name, queue_name = ?self.config.queue_name))]
+    pub async fn run<C>(&self, consumer: C)
+    where
+        C: AsyncConsumer + Send + Sync + Clone + 'static,
+    {
+        loop {
+            match self.setup(consumer.clone()).await {
+                Ok(_) => debug!("Subscriber channel established"),
+                Err(e) => error!("failed to set up subscriber: {:?}", e),
+            }
+
+            sleep(Duration::from_secs(5)).await;
         }
-        self.channel = None;
-        Ok(())
+    }
+
+    #[instrument(skip(self), fields(exchange_name = %self.config.exchange_config.exchange_name, queue_name = ?self.config.queue_name))]
+    pub async fn close_channel(&self) {
+        let mut chan_lock = self.channel.lock().await;
+        if let Some(channel) = chan_lock.take() {
+            match channel.close().await {
+                Ok(_) => info!("Channel closed"),
+                Err(e) => error!("Failed to close channel: {:?}", e),
+            }
+        }
     }
 }
