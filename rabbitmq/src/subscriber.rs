@@ -9,7 +9,7 @@ use amqprs::{
 };
 use color_eyre::{eyre::eyre, Result};
 use tokio::{sync::Mutex, time::sleep};
-use tracing::{error, info, instrument};
+use tracing::{debug, error, info, instrument};
 
 use crate::{config::SubscriberConfig, ConnectionManager};
 
@@ -136,7 +136,7 @@ impl Subscriber {
     {
         loop {
             match self.setup(consumer.clone()).await {
-                Ok(_) => info!("Subscriber channel established"),
+                Ok(_) => debug!("Subscriber channel established"),
                 Err(e) => error!("failed to set up subscriber: {:?}", e),
             }
 
