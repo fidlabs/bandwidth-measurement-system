@@ -3,10 +3,13 @@ use color_eyre::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::{
     prelude::{FromRow, Type},
+    types::Json,
     PgPool,
 };
 use utoipa::ToSchema;
 use uuid::Uuid;
+
+use super::job_repository::Job;
 
 #[derive(Deserialize, Serialize, Debug, Type, ToSchema, Clone)]
 #[sqlx(type_name = "sub_job_status")]
@@ -40,6 +43,19 @@ pub struct SubJob {
     pub r#type: SubJobType,
     pub details: serde_json::Value,
     pub deadline_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Serialize, Deserialize, FromRow, Debug, Type, ToSchema)]
+#[allow(dead_code)]
+pub struct SubJobWithJob {
+    pub id: Uuid,
+    pub job_id: Uuid,
+    pub status: SubJobStatus,
+    pub r#type: SubJobType,
+    pub details: serde_json::Value,
+    pub deadline_at: Option<DateTime<Utc>>,
+    #[schema(value_type = Job)]
+    pub job: Json<Job>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Type)]
@@ -217,14 +233,29 @@ impl SubJobRepository {
         Ok(count.count.unwrap())
     }
 
-    pub async fn get_first_unfinished_sub_job(&self) -> Result<SubJob, sqlx::Error> {
+    pub async fn get_first_unfinished_sub_job(&self) -> Result<SubJobWithJob, sqlx::Error> {
         let sub_job = sqlx::query_as!(
-            SubJob,
+            SubJobWithJob,
             r#"
-            SELECT id, job_id, status as "status!: SubJobStatus", type as "type!: SubJobType", details, deadline_at
-            FROM sub_jobs
-            WHERE status = 'Created' OR status = 'Pending' OR status = 'Processing' 
-            ORDER BY created_at ASC
+            SELECT
+                sj.id,
+                sj.job_id,
+                sj.status as "status!: SubJobStatus",
+                sj.type as "type!: SubJobType",
+                sj.details,
+                sj.deadline_at,
+                JSON_BUILD_OBJECT(
+                    'id', j.id,
+                    'url', j.url,
+                    'routing_key', j.routing_key,
+                    'status', j.status,
+                    'details', j.details
+                ) AS "job!: Json<Job>"
+            FROM sub_jobs sj
+            JOIN jobs j ON sj.job_id = j.id
+            WHERE 
+                sj.status IN ('Created', 'Pending', 'Processing')
+            ORDER BY sj.created_at ASC
             LIMIT 1
             "#,
         )
@@ -238,13 +269,30 @@ impl SubJobRepository {
         &self,
         job_id: &Uuid,
         sub_job_type: SubJobType,
-    ) -> Result<SubJob, sqlx::Error> {
+    ) -> Result<SubJobWithJob, sqlx::Error> {
         let sub_job = sqlx::query_as!(
-            SubJob,
+            SubJobWithJob,
             r#"
-            SELECT id, job_id, status as "status!: SubJobStatus", type as "type!: SubJobType", details, deadline_at
-            FROM sub_jobs
-            WHERE job_id = $1 AND type = $2
+            SELECT 
+                sj.id,
+                sj.job_id,
+                sj.status as "status!: SubJobStatus",
+                sj.type as "type!: SubJobType",
+                sj.details,
+                sj.deadline_at,
+                JSON_BUILD_OBJECT(
+                    'id', j.id,
+                    'url', j.url,
+                    'routing_key', j.routing_key,
+                    'status', j.status,
+                    'details', j.details
+                ) AS "job!: Json<Job>"
+            FROM 
+                sub_jobs as sj
+            JOIN 
+                jobs as j ON sj.job_id = j.id
+            WHERE 
+                sj.job_id = $1 AND sj.type = $2
             "#,
             job_id,
             sub_job_type as SubJobType,

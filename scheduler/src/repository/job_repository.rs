@@ -89,7 +89,30 @@ pub struct WorkerDataError {
 pub struct JobDetails {
     pub start_range: i64,
     pub end_range: i64,
+    pub target_worker_count: Option<i64>,
     pub workers_count: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entity: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+impl JobDetails {
+    pub fn new(
+        start_range: i64,
+        end_range: i64,
+        target_worker_count: i64,
+        entity: Option<String>,
+        note: Option<String>,
+    ) -> Self {
+        JobDetails {
+            start_range,
+            end_range,
+            target_worker_count: Some(target_worker_count),
+            workers_count: None,
+            entity,
+            note,
+        }
+    }
 }
 impl From<serde_json::Value> for JobDetails {
     fn from(value: serde_json::Value) -> Self {
@@ -97,7 +120,7 @@ impl From<serde_json::Value> for JobDetails {
     }
 }
 
-#[derive(Debug, FromRow, Serialize, ToSchema)]
+#[derive(Debug, FromRow, Serialize, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct Job {
     pub id: Uuid,
@@ -129,7 +152,7 @@ impl JobRepository {
         url: String,
         routing_key: &String,
         status: JobStatus,
-        details: serde_json::Value,
+        details: JobDetails,
     ) -> Result<Job, sqlx::Error> {
         let job = sqlx::query_as!(
             Job,
@@ -142,7 +165,7 @@ impl JobRepository {
             url,
             routing_key,
             status as JobStatus,
-            details,
+            serde_json::to_value(details).unwrap(),
         )
         .fetch_one(&self.pool)
         .await?;
@@ -150,6 +173,7 @@ impl JobRepository {
         Ok(job)
     }
 
+    #[allow(dead_code)]
     pub async fn get_job_by_id(&self, job_id: &Uuid) -> Result<Job, sqlx::Error> {
         let job = sqlx::query_as!(
             Job,
@@ -188,7 +212,7 @@ impl JobRepository {
     pub async fn update_job_workers_count(
         &self,
         job_id: &Uuid,
-        expected_workers: i64,
+        expected_workers: usize,
     ) -> Result<(), sqlx::Error> {
         sqlx::query!(
             r#"
@@ -197,7 +221,7 @@ impl JobRepository {
             WHERE id = $1
             "#,
             job_id,
-            expected_workers,
+            expected_workers as i64,
         )
         .execute(&self.pool)
         .await?;
@@ -208,6 +232,7 @@ impl JobRepository {
     pub async fn get_job_by_id_with_subjobs_and_data(
         &self,
         job_id: Uuid,
+        extended_logs: bool,
     ) -> Result<JobWithSubJobsWithData, sqlx::Error> {
         let job = sqlx::query_as!(
             JobWithSubJobsWithData,
@@ -240,7 +265,7 @@ impl JobRepository {
                             'id', d.id,
                             'worker_name', d.worker_name,
                             'is_success', COALESCE(d.is_success, false),
-                            'download', d.download - 'second_by_second_logs',
+                            'download', CASE WHEN $2 THEN d.download ELSE d.download - 'second_by_second_logs' END,
                             'ping', d.ping,
                             'head', d.head
                         )
@@ -253,7 +278,8 @@ impl JobRepository {
             ) sub_jobs_agg ON TRUE
             WHERE j.id = $1
             "#,
-            job_id
+            job_id,
+            extended_logs
         )
         .fetch_one(&self.pool)
         .await?;

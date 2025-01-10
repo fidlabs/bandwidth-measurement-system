@@ -8,7 +8,7 @@ use crate::{
 };
 use axum::{
     debug_handler,
-    extract::{Path, State},
+    extract::{Path, Query, State},
 };
 use axum_extra::extract::WithRejection;
 use serde::{Deserialize, Serialize};
@@ -22,6 +22,12 @@ use crate::api::api_response::*;
 #[derive(Deserialize, ToSchema, IntoParams)]
 pub struct GetJobPathParams {
     job_id: Uuid,
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct GetJobQueryParams {
+    #[schema(example = "false")]
+    pub extended: Option<bool>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -62,20 +68,19 @@ pub struct JobSummary {
 )]
 #[debug_handler]
 pub async fn handle_get_job(
-    WithRejection(Path(params), _): WithRejection<
-        Path<GetJobPathParams>,
-        ApiResponse<ErrorResponse>,
-    >,
+    WithRejection(Path(path), _): WithRejection<Path<GetJobPathParams>, ApiResponse<ErrorResponse>>,
+    Query(query): Query<GetJobQueryParams>,
     State(state): State<Arc<AppState>>,
 ) -> Result<ApiResponse<GetJobResponse>, ApiResponse<()>> {
-    let job_id = params.job_id;
+    let job_id = path.job_id;
+    let extended = query.extended.unwrap_or(false);
 
     info!("Getting data for job_id: {}", job_id);
 
     let job = state
         .repo
         .job
-        .get_job_by_id_with_subjobs_and_data(job_id)
+        .get_job_by_id_with_subjobs_and_data(job_id, extended)
         .await
         .map_err(|e| match e {
             sqlx::Error::RowNotFound => not_found("Job data not found"),
