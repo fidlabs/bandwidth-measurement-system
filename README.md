@@ -1,5 +1,13 @@
 # Bandwith Measurement System (BMS)
 
+The BMS is an experimental system to understand how to estimate available bandwidth capacity of a remote HTTP server under a "non-cooperative" model. Existing systems measuring bandwidth / available capacity between two internet nodes typically involve software running on both systmes. In contrast, BMS attempts to estimate the capacity from one measurement host without any software or coordination from the remote systems being measured. This model leads to several questions:
+* What requirements are needed on a remote system-under-test to get a valid measurement (how large of a file should be present on a remote HTTP server? how many vantage points, and with what relationship to the node under test are needed to have confidence in the determination?)
+* In what ways could the system be game-able by a node under test that is attempting to manipulate measurments?
+* How does confidence increase with additional resource usage? Where are good efficiency points between confidence and cost?
+* Is it possible to characterize the bandwidth of remote nodes without impacting their services / acting like a ddos?
+
+The high level design of BMS is to coordinate a set of worker nodes to attempt to download a file from a remote server at the same time. The process is repeated with increasing numbers of measuring nodes until the overall bandwidth observed reaches a plateau / maximum.
+
 ## Infrastucture
 
 - Scheduler (Rust)
