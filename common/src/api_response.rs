@@ -17,6 +17,7 @@ pub enum ApiResponse<T> {
     InternalServerError(Json<ErrorResponse>),
     NotFound(Json<ErrorResponse>),
     Unauthorized(Json<ErrorResponse>),
+    TooManyRequests(Json<ErrorResponse>),
     OkResponse(Json<T>),
 }
 
@@ -57,6 +58,9 @@ where
             ApiResponse::NotFound(json) => (StatusCode::NOT_FOUND, json).into_response(),
             ApiResponse::OkResponse(json) => (StatusCode::OK, json).into_response(),
             ApiResponse::Unauthorized(json) => (StatusCode::UNAUTHORIZED, json).into_response(),
+            ApiResponse::TooManyRequests(json) => {
+                (StatusCode::TOO_MANY_REQUESTS, json).into_response()
+            }
         }
     }
 }
@@ -79,4 +83,8 @@ pub fn ok_response<T: Serialize>(data: T) -> ApiResponse<T> {
 
 pub fn unauthorized<T: Into<String>>(msg: T) -> ApiResponse<()> {
     ApiResponse::Unauthorized(Json(ErrorResponse { error: msg.into() }))
+}
+
+pub fn too_many_requests<T: Into<String>>(msg: T) -> ApiResponse<()> {
+    ApiResponse::TooManyRequests(Json(ErrorResponse { error: msg.into() }))
 }
