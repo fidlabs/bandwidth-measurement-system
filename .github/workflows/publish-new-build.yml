@@ -127,7 +127,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.ref_name == 'main' && inputs.version != '' && inputs.deploy-to-production == true }}
     steps:
-      - name: Trigger ${{ matrix.region }} production workers deploy
+      - name: Trigger ${{ matrix.region }} production worker deploy
         uses: neti-filplus-infra/filplus-deploy-action@main
         with:
           version: ${{ inputs.version }}

@@ -21,21 +21,36 @@ permissions:
   contents: read
 
 jobs:
-  trigger-production-deploy:
-    strategy:
-      matrix:
-        repository:
-          - filplus-provider-benchmark
-          - filplus-provider-benchmark-worker
+  trigger-production-scheduler-deploy:
     runs-on: ubuntu-latest
     if: ${{ github.ref_name == 'main' && inputs.version != '' && inputs.environment == 'production' }}
     steps:
-      - name: Trigger ${{ matrix.repository }} production deploy
+      - name: Trigger production scheduler deploy
         uses: neti-filplus-infra/filplus-deploy-action@main
         with:
           version: ${{ inputs.version }}
           environment: production
-          ecr-repository: ${{ matrix.repository }}
+          ecr-repository: filplus-provider-benchmark
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_IMAGE_DEPLOYER }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_IMAGE_DEPLOYER }}
           aws-region: us-east-1
+
+  trigger-production-workers-deploy:
+    strategy:
+      matrix:
+        region:
+          - us-east-1
+          - ap-southeast-1
+          - ap-east-1
+    runs-on: ubuntu-latest
+    if: ${{ github.ref_name == 'main' && inputs.version != '' && inputs.environment == 'production' }}
+    steps:
+      - name: Trigger ${{ matrix.region }} production worker deploy
+        uses: neti-filplus-infra/filplus-deploy-action@main
+        with:
+          version: ${{ inputs.version }}
+          environment: production
+          ecr-repository: filplus-provider-benchmark-worker
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_IMAGE_DEPLOYER }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_IMAGE_DEPLOYER }}
+          aws-region: ${{ matrix.region }}
