@@ -96,6 +96,10 @@ jobs:
           git push origin $TAG_NAME
 
   trigger-production-deploy:
+    needs:
+      - code-check
+      - bump-version
+      - build-and-publish
     strategy:
       matrix:
         repository:
