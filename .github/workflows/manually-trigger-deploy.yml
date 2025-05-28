@@ -21,11 +21,21 @@ permissions:
   contents: read
 
 jobs:
-  trigger-deploy:
-    uses: ./.github/workflows/put-ssm-version-deploy.yml
-    if: ${{ inputs.version != '' && inputs.environment != '' }}
-    with:
-      version: ${{ inputs.version }}
-      environment: ${{ inputs.environment }}
-      ecr-repository: filplus-provider-benchmark
-    secrets: inherit
+  trigger-production-deploy:
+    strategy:
+      matrix:
+        repository:
+          - filplus-provider-benchmark
+          - filplus-provider-benchmark-worker
+    runs-on: ubuntu-latest
+    if: ${{ github.ref_name == 'main' && inputs.version != '' && inputs.environment == 'production' }}
+    steps:
+      - name: Trigger ${{ matrix.repository }} production deploy
+        uses: neti-filplus-infra/filplus-deploy-action@main
+        with:
+          version: ${{ inputs.version }}
+          environment: production
+          ecr-repository: ${{ matrix.repository }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_IMAGE_DEPLOYER }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_IMAGE_DEPLOYER }}
+          aws-region: us-east-1

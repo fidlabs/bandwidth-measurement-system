@@ -13,18 +13,11 @@ on:
         description: "Enter the version number"
         required: true
         default: "latest"
-      deploy:
+      deploy-to-production:
         description: "Deploy the new version?"
         required: false
         type: boolean
         default: false
-      environment:
-        required: false
-        description: "Select the environment to deploy to"
-        type: choice
-        options:
-          - production
-        default: production
 
 permissions:
   contents: write
@@ -101,19 +94,22 @@ jobs:
           TAG_NAME="v${{ inputs.version }}"
           git tag $TAG_NAME
           git push origin $TAG_NAME
-  trigger-deploy:
-    needs:
-      - code-check
-      - bump-version
-      - git-tag
-    uses: ./.github/workflows/put-ssm-version-deploy.yml
-    if: |
-      ${{ inputs.version != '' && inputs.deploy == true && inputs.environment != ''}} &&
-      always() &&
-      !contains(needs.*.result, 'failure') &&
-      !contains(needs.*.result, 'cancelled')
-    with:
-      version: ${{ inputs.version }}
-      environment: ${{ inputs.environment }}
-      ecr-repository: filplus-provider-benchmark
-    secrets: inherit
+
+  trigger-production-deploy:
+    strategy:
+      matrix:
+        repository:
+          - filplus-provider-benchmark
+          - filplus-provider-benchmark-worker
+    runs-on: ubuntu-latest
+    if: ${{ github.ref_name == 'main' && inputs.version != '' && inputs.deploy-to-production == true }}
+    steps:
+      - name: Trigger ${{ matrix.repository }} production deploy
+        uses: neti-filplus-infra/filplus-deploy-action@main
+        with:
+          version: ${{ inputs.version }}
+          environment: production
+          ecr-repository: ${{ matrix.repository }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_IMAGE_DEPLOYER }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_IMAGE_DEPLOYER }}
+          aws-region: us-east-1
