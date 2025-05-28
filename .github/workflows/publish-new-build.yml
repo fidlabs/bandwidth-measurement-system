@@ -95,25 +95,44 @@ jobs:
           git tag $TAG_NAME
           git push origin $TAG_NAME
 
-  trigger-production-deploy:
+  trigger-production-scheduler-deploy:
+    needs:
+      - code-check
+      - bump-version
+      - build-and-publish
+    runs-on: ubuntu-latest
+    if: ${{ github.ref_name == 'main' && inputs.version != '' && inputs.deploy-to-production == true }}
+    steps:
+      - name: Trigger production scheduler deploy
+        uses: neti-filplus-infra/filplus-deploy-action@main
+        with:
+          version: ${{ inputs.version }}
+          environment: production
+          ecr-repository: filplus-provider-benchmark
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_IMAGE_DEPLOYER }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_IMAGE_DEPLOYER }}
+          aws-region: us-east-1
+
+  trigger-production-workers-deploy:
     needs:
       - code-check
       - bump-version
       - build-and-publish
     strategy:
       matrix:
-        repository:
-          - filplus-provider-benchmark
-          - filplus-provider-benchmark-worker
+        region:
+          - us-east-1
+          - ap-southeast-1
+          - ap-east-1
     runs-on: ubuntu-latest
     if: ${{ github.ref_name == 'main' && inputs.version != '' && inputs.deploy-to-production == true }}
     steps:
-      - name: Trigger ${{ matrix.repository }} production deploy
+      - name: Trigger ${{ matrix.region }} production workers deploy
         uses: neti-filplus-infra/filplus-deploy-action@main
         with:
           version: ${{ inputs.version }}
           environment: production
-          ecr-repository: ${{ matrix.repository }}
+          ecr-repository: filplus-provider-benchmark-worker
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_IMAGE_DEPLOYER }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_IMAGE_DEPLOYER }}
-          aws-region: us-east-1
+          aws-region: ${{ matrix.region }}
