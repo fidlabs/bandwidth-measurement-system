@@ -247,18 +247,5 @@ If some of the workers finish faster than others, the rest of the workers will h
 
 ---
 
-### Edge Case: Zero Results at Full Scale **[▪️ rerun with more workers]**
-
-- **File URL:** http://203.160.91.76:11876/piece/baga6ea4seaqeegsfeyqlyvccmnklnxab2sl3da7zsguqgaq7gc57fthps2ndudi  
-- **Job ID:** `c588366d-42b4-4227-8250-6e4898aac41e`  
-- **Job URL:** https://bms.allocator.tech/jobs/c588366d-42b4-4227-8250-6e4898aac41e
-- **Region:** hong_kong  
-- **Speeds (Mbps):**  
-  - 1% workers: 792.1  
-  - 80% workers: 0  
-  - 100% workers: 0  
-- **Description:** Full-scale test returned no data—likely worker failures under load. **Rerun with additional workers** or check RabbitMQ/worker stability.
-
----
 
 
