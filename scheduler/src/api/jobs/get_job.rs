@@ -21,7 +21,7 @@ pub struct GetJobPathParams {
     job_id: Uuid,
 }
 
-#[derive(Serialize, Deserialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema, IntoParams)]
 pub struct GetJobQueryParams {
     #[schema(example = "false")]
     pub extended: Option<bool>,
@@ -52,7 +52,10 @@ pub struct JobSummary {
 #[utoipa::path(
     get,
     path = "/jobs/{job_id}",
-    params (GetJobPathParams),
+    params (
+        GetJobPathParams,
+        GetJobQueryParams
+    ),
     description = r#"
 **Get the job with sub jobs and worker data.**
 "#,
