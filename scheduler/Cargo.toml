@@ -1,6 +1,6 @@
 [package]
 name = "scheduler"
-version = "1.0.3"
+version = "1.0.4"
 edition = "2021"
 authors = ["Michał Mach <michal.mach@neti-soft.com>"]
 
@@ -13,7 +13,7 @@ axum-extra = { version = "0.9.3" }
 color-eyre = "0.6.3"
 dotenvy = "0.15.7"
 once_cell = "1.19.0"
-rabbitmq = { version = "1.0.3", path = "../rabbitmq" }
+rabbitmq = { version = "1.0.4", path = "../rabbitmq" }
 rand = "0.8.5"
 reqwest = {version = "0.12.7", features = ["json"]}
 serde = {version = "1.0.209", features = ["derive"]}
@@ -39,7 +39,7 @@ aws-sdk-ecs = "1.47.0"
 aws-config = { version = "1.5.8", features = ["behavior-version-latest"] }
 utoipa = { version = "5.2.0", features = ["axum_extras", "uuid", "url", "chrono", "debug"] }
 utoipa-swagger-ui = {version = "8.0.3", features = ["axum", "reqwest", "url"]}
-common = { version = "1.0.3", path = "../common" }
+common = { version = "1.0.4", path = "../common" }
 
 [dev-dependencies]
 sqlx-cli = "0.8.2"
