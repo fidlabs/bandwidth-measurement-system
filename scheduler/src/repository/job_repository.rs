@@ -28,6 +28,7 @@ pub struct JobRepository {
 }
 
 #[derive(Serialize, Debug, FromRow, Type)]
+#[allow(dead_code)]
 pub struct JobWithData {
     pub id: Uuid,
     pub url: Option<String>,
