@@ -20,7 +20,7 @@ pub async fn process(job_id: Uuid, payload: JobMessage) -> Result<PingResult, Pi
 
     // Parse the URL and extract the host
     let url = Url::parse(&payload.url).map_err(|e| PingError {
-        error: format!("UrlParseError: {}", e),
+        error: format!("UrlParseError: {e}"),
     })?;
     let host = url.host_str().ok_or(PingError {
         error: "Failed to extract host from URL".to_string(),
@@ -45,7 +45,7 @@ pub async fn process(job_id: Uuid, payload: JobMessage) -> Result<PingResult, Pi
         IpAddr::V6(_) => Config::builder().kind(ICMP::V6).build(),
     };
     let client = Client::new(&config).map_err(|e| PingError {
-        error: format!("SurgePingClientError: {}", e),
+        error: format!("SurgePingClientError: {e}"),
     })?;
     let mut pinger = client.pinger(ip_address, PingIdentifier(random())).await;
 

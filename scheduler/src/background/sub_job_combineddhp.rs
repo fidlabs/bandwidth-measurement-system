@@ -102,9 +102,10 @@ async fn process_status_created(
             url: job.url.clone(),
             start_time,
             download_start_time,
-            start_range: job.details.start_range as u64,
-            end_range: job.details.end_range as u64,
+            start_range: job.details.start_range,
+            end_range: job.details.end_range,
             excluded_workers,
+            log_interval_ms: job.details.log_interval_ms,
         },
     };
 
@@ -153,7 +154,7 @@ async fn process_status_processing(
         .data
         .get_data_by_sub_job_id(&sub_job.id)
         .await
-        .map_err(|e| SubJobHandlerError::Skip(format!("Failed to get data: {}", e)))?;
+        .map_err(|e| SubJobHandlerError::Skip(format!("Failed to get data: {e}")))?;
 
     if data.len() >= workers_count as usize {
         repo.sub_job
@@ -167,7 +168,7 @@ async fn process_status_processing(
             .count_pending_sub_jobs(SubJobType::CombinedDHP, &sub_job.job_id)
             .await
             .map_err(|e| {
-                SubJobHandlerError::Skip(format!("Failed to count pending sub jobs: {}", e))
+                SubJobHandlerError::Skip(format!("Failed to count pending sub jobs: {e}"))
             })?;
 
         debug!("Pending sub jobs: {}", pending_sub_jobs);
@@ -180,7 +181,7 @@ async fn process_status_processing(
                 .update_job_status(&sub_job.job_id, JobStatus::Completed)
                 .await
                 .map_err(|e| {
-                    SubJobHandlerError::Skip(format!("Failed to update job status: {}", e))
+                    SubJobHandlerError::Skip(format!("Failed to update job status: {e}"))
                 })?;
         }
     }

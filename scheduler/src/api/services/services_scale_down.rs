@@ -79,7 +79,7 @@ pub async fn handle_services_scale_down(
         .inspect_err(|e| {
             error!("ServiceScaler scale down error: {:?}", e);
         })
-        .map_err(|e| internal_server_error(format!("ServiceScaler scale down: {:?}", e)))?;
+        .map_err(|e| internal_server_error(format!("ServiceScaler scale down: {e:?}")))?;
 
     debug!("Successfull worker scale down");
 
@@ -89,7 +89,7 @@ pub async fn handle_services_scale_down(
         .inspect_err(|e| {
             error!("ServiceScaler get info error: {:?}", e);
         })
-        .map_err(|e| internal_server_error(format!("ServiceScaler get info: {:?}", e)))?;
+        .map_err(|e| internal_server_error(format!("ServiceScaler get info: {e:?}")))?;
 
     // Clear descale deadline if desired count is down to 0
     if let Some(desired_count) = service_info.desired_count {

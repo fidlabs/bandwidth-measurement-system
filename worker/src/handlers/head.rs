@@ -34,7 +34,7 @@ pub async fn process(job_id: Uuid, payload: JobMessage) -> Result<HeadResult, He
             .send()
             .await
             .map_err(|e| HeadError {
-                error: format!("RequestError: {}", e),
+                error: format!("RequestError: {e}"),
             })?;
 
         // Measure the elapsed time

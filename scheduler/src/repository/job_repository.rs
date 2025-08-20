@@ -95,6 +95,8 @@ pub struct JobDetails {
     pub entity: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    pub log_interval_ms: i64,
+    pub size_mb: i64,
 }
 impl JobDetails {
     pub fn new(
@@ -103,6 +105,8 @@ impl JobDetails {
         target_worker_count: i64,
         entity: Option<String>,
         note: Option<String>,
+        log_interval_ms: i64,
+        size_mb: i64,
     ) -> Self {
         JobDetails {
             start_range,
@@ -111,6 +115,8 @@ impl JobDetails {
             workers_count: None,
             entity,
             note,
+            log_interval_ms,
+            size_mb,
         }
     }
 }

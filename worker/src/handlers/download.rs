@@ -86,11 +86,11 @@ pub async fn process(job_id: Uuid, payload: JobMessage) -> Result<DownloadResult
     wait_for_start_time(&payload)
         .await
         .map_err(|e| DownloadError {
-            error: format!("TimeSyncError: {}", e),
+            error: format!("TimeSyncError: {e}"),
         })?;
 
     let mut response = request.send().await.map_err(|e| DownloadError {
-        error: format!("RequestError: {}", e),
+        error: format!("RequestError: {e}"),
     })?;
 
     if !response.status().is_success() {
@@ -104,11 +104,11 @@ pub async fn process(job_id: Uuid, payload: JobMessage) -> Result<DownloadResult
 
     // It seems that time to first byte can be quite long, so we need to adjust the start time for better download speed calculation
     let download_start_time = Utc::now();
-    let mut next_log_time = calculate_next_even_second(download_start_time);
+    let mut next_log_time = calculate_next_interval(download_start_time, payload.log_interval_ms);
 
     debug!(
-        "job_start_time: {}, download_start_time: {}, next_log_time: {}",
-        job_start_time, download_start_time, next_log_time
+        "job_start_time: {}, download_start_time: {}, next_log_time: {}, log_interval_ms: {}",
+        job_start_time, download_start_time, next_log_time, payload.log_interval_ms
     );
 
     while let Some(chunk) = download_chunk(&mut response).await? {
@@ -141,7 +141,7 @@ pub async fn process(job_id: Uuid, payload: JobMessage) -> Result<DownloadResult
             // Reset the interval byte counter
             bytes = 0;
             // Increment next log time to the next even second
-            next_log_time = calculate_next_even_second(current_time);
+            next_log_time = calculate_next_interval(current_time, payload.log_interval_ms);
             debug!(
                 "Duration from current time {:?}",
                 (next_log_time - current_time).num_milliseconds()

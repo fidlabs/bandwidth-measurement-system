@@ -26,13 +26,13 @@ impl ServiceScalerError {
     pub fn to_str(&self) -> String {
         match self {
             ServiceScalerError::CommandError(msg) => {
-                format!("ServiceScalerError::CommandError: {}", msg)
+                format!("ServiceScalerError::CommandError: {msg}")
             }
             ServiceScalerError::GenericError(msg) => {
-                format!("ServiceScalerError::GenericError: {}", msg)
+                format!("ServiceScalerError::GenericError: {msg}")
             }
             ServiceScalerError::InvalidService(msg) => {
-                format!("ServiceScalerError::InvalidService: {}", msg)
+                format!("ServiceScalerError::InvalidService: {msg}")
             }
         }
     }

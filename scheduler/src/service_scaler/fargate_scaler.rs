@@ -96,7 +96,7 @@ impl FargateScaler {
             .await
             .map_err(|e| {
                 error!("DescribeServices failed: {:?}", e);
-                ServiceScalerError::GenericError(format!("DescribeServices failed: {}", e))
+                ServiceScalerError::GenericError(format!("DescribeServices failed: {e}"))
             })?;
 
         debug!("DescribeServices response: {:?}", resp);
@@ -147,7 +147,7 @@ impl FargateScaler {
             .await
             .map_err(|e| {
                 error!("UpdateService failed: {:?}", e);
-                ServiceScalerError::GenericError(format!("UpdateService failed: {}", e))
+                ServiceScalerError::GenericError(format!("UpdateService failed: {e}"))
             })?;
 
         let aws_service = res

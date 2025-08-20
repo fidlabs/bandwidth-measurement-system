@@ -95,6 +95,7 @@ async fn process_scaling_created(
 
     // Scale up each service
     for service in services {
+        debug!("Scaling up service: {} id: {}", service.name, service.id);
         let scaler = service_scaler_registry
             .get_scaler(&service.provider_type)
             .ok_or(SubJobHandlerError::FailedJob("No scaler found".to_string()))?;
@@ -103,6 +104,11 @@ async fn process_scaling_created(
             .scale_up(&service, scale_each_by.try_into().unwrap_or(0))
             .await
             .map_err(|e| SubJobHandlerError::Skip(e.to_str()))?;
+
+        info!(
+            "Scaled up service: {} id: {} by {}",
+            service.name, service.id, scale_each_by
+        );
     }
 
     // Update sub job status to processing
