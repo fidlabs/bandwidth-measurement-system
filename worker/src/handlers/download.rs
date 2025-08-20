@@ -14,21 +14,21 @@ use uuid::Uuid;
 const MAX_DOWNLOAD_DURATION: Duration = Duration::seconds(60);
 
 /// Prepare the HTTP request
-fn prepare_request(url: &str, range_start: u64, range_end: u64) -> reqwest::RequestBuilder {
+fn prepare_request(url: &str, range_start: i64, range_end: i64) -> reqwest::RequestBuilder {
     const USER_AGENT_STR: &str = "curl/7.68.0";
     const ACCEPT_TYPE: &str = "*/*";
 
     Client::new()
         .get(url)
-        .header(RANGE, format!("bytes={}-{}", range_start, range_end))
+        .header(RANGE, format!("bytes={range_start}-{range_end}"))
         .header(USER_AGENT, USER_AGENT_STR)
         .header(ACCEPT, ACCEPT_TYPE)
 }
 
-/// Calculates the next even second from the given time.
-fn calculate_next_even_second(current: DateTime<Utc>) -> DateTime<Utc> {
-    let millis = current.timestamp_millis() % 1000;
-    let remaining_millis = 1000 - millis;
+/// Calculates the next interval based on the current time and the specified interval in milliseconds.
+fn calculate_next_interval(current: DateTime<Utc>, interval_milis: i64) -> DateTime<Utc> {
+    let millis = current.timestamp_millis() % interval_milis;
+    let remaining_millis = interval_milis - millis;
 
     current + Duration::milliseconds(remaining_millis)
 }
@@ -63,7 +63,7 @@ async fn download_chunk(response: &mut Response) -> Result<Option<Bytes>, Downlo
     match timeout(MAX_DOWNLOAD_DURATION.to_std().unwrap(), response.chunk()).await {
         Ok(Ok(chunk)) => Ok(chunk),
         Ok(Err(e)) => Err(DownloadError {
-            error: format!("ChunkError: {}", e),
+            error: format!("ChunkError: {e}"),
         }),
         _ => Ok(None),
     }
