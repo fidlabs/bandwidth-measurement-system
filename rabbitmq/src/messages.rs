@@ -62,6 +62,7 @@ pub struct PingResult {
     pub min: f64,
     pub max: f64,
     pub avg: f64,
+    pub ip_address: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

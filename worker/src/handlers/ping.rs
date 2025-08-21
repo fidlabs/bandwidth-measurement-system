@@ -97,5 +97,6 @@ pub async fn process(job_id: Uuid, payload: JobMessage) -> Result<PingResult, Pi
         avg: avg_latency,
         min: min_latency,
         max: max_latency,
+        ip_address: ip_address.to_string(),
     })
 }
