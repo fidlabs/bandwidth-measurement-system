@@ -54,7 +54,7 @@ impl DockerScaler {
             .args([
                 "ps",
                 "--filter",
-                &format!("label=com.docker.compose.service={}", service_name),
+                &format!("label=com.docker.compose.service={service_name}"),
                 "--format",
                 "{{.ID}}",
             ])
@@ -80,7 +80,7 @@ impl DockerScaler {
                 "up",
                 "-d",
                 "--scale",
-                &format!("{}={}", service_name, count),
+                &format!("{service_name}={count}"),
                 service_name,
             ])
             .status()

@@ -68,7 +68,7 @@ pub async fn handle_services_info(
         .inspect_err(|e| {
             error!("ServiceScaler get info error: {:?}", e);
         })
-        .map_err(|e| internal_server_error(format!("ServiceScaler get info: {:?}", e)))?;
+        .map_err(|e| internal_server_error(format!("ServiceScaler get info: {e:?}")))?;
 
     debug!(
         "Successfully got service info name: {}, instances: {}",

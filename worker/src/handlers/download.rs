@@ -14,21 +14,21 @@ use uuid::Uuid;
 const MAX_DOWNLOAD_DURATION: Duration = Duration::seconds(60);
 
 /// Prepare the HTTP request
-fn prepare_request(url: &str, range_start: u64, range_end: u64) -> reqwest::RequestBuilder {
+fn prepare_request(url: &str, range_start: i64, range_end: i64) -> reqwest::RequestBuilder {
     const USER_AGENT_STR: &str = "curl/7.68.0";
     const ACCEPT_TYPE: &str = "*/*";
 
     Client::new()
         .get(url)
-        .header(RANGE, format!("bytes={}-{}", range_start, range_end))
+        .header(RANGE, format!("bytes={range_start}-{range_end}"))
         .header(USER_AGENT, USER_AGENT_STR)
         .header(ACCEPT, ACCEPT_TYPE)
 }
 
-/// Calculates the next even second from the given time.
-fn calculate_next_even_second(current: DateTime<Utc>) -> DateTime<Utc> {
-    let millis = current.timestamp_millis() % 1000;
-    let remaining_millis = 1000 - millis;
+/// Calculates the next interval based on the current time and the specified interval in milliseconds.
+fn calculate_next_interval(current: DateTime<Utc>, interval_milis: i64) -> DateTime<Utc> {
+    let millis = current.timestamp_millis() % interval_milis;
+    let remaining_millis = interval_milis - millis;
 
     current + Duration::milliseconds(remaining_millis)
 }
@@ -63,7 +63,7 @@ async fn download_chunk(response: &mut Response) -> Result<Option<Bytes>, Downlo
     match timeout(MAX_DOWNLOAD_DURATION.to_std().unwrap(), response.chunk()).await {
         Ok(Ok(chunk)) => Ok(chunk),
         Ok(Err(e)) => Err(DownloadError {
-            error: format!("ChunkError: {}", e),
+            error: format!("ChunkError: {e}"),
         }),
         _ => Ok(None),
     }
@@ -86,11 +86,11 @@ pub async fn process(job_id: Uuid, payload: JobMessage) -> Result<DownloadResult
     wait_for_start_time(&payload)
         .await
         .map_err(|e| DownloadError {
-            error: format!("TimeSyncError: {}", e),
+            error: format!("TimeSyncError: {e}"),
         })?;
 
     let mut response = request.send().await.map_err(|e| DownloadError {
-        error: format!("RequestError: {}", e),
+        error: format!("RequestError: {e}"),
     })?;
 
     if !response.status().is_success() {
@@ -104,11 +104,11 @@ pub async fn process(job_id: Uuid, payload: JobMessage) -> Result<DownloadResult
 
     // It seems that time to first byte can be quite long, so we need to adjust the start time for better download speed calculation
     let download_start_time = Utc::now();
-    let mut next_log_time = calculate_next_even_second(download_start_time);
+    let mut next_log_time = calculate_next_interval(download_start_time, payload.log_interval_ms);
 
     debug!(
-        "job_start_time: {}, download_start_time: {}, next_log_time: {}",
-        job_start_time, download_start_time, next_log_time
+        "job_start_time: {}, download_start_time: {}, next_log_time: {}, log_interval_ms: {}",
+        job_start_time, download_start_time, next_log_time, payload.log_interval_ms
     );
 
     while let Some(chunk) = download_chunk(&mut response).await? {
@@ -141,7 +141,7 @@ pub async fn process(job_id: Uuid, payload: JobMessage) -> Result<DownloadResult
             // Reset the interval byte counter
             bytes = 0;
             // Increment next log time to the next even second
-            next_log_time = calculate_next_even_second(current_time);
+            next_log_time = calculate_next_interval(current_time, payload.log_interval_ms);
             debug!(
                 "Duration from current time {:?}",
                 (next_log_time - current_time).num_milliseconds()

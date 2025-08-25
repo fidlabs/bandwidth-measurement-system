@@ -17,9 +17,10 @@ pub struct JobMessage {
     pub url: String,
     pub start_time: DateTime<Utc>,
     pub download_start_time: DateTime<Utc>,
-    pub start_range: u64,
-    pub end_range: u64,
+    pub start_range: i64,
+    pub end_range: i64,
     pub excluded_workers: Vec<String>,
+    pub log_interval_ms: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
