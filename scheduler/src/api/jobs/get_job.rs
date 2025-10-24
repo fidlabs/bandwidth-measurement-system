@@ -38,6 +38,7 @@ pub struct GetJobResponse {
 pub struct DownloadSpeed {
     sub_job_id: Uuid,
     download_speed: f64,
+    average_time_to_first_byte_ms: f64,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -105,9 +106,25 @@ pub async fn handle_get_job(
                     .unwrap_or(0.0)
             });
 
+            let sub_job_ttfb = sub_job.worker_data.iter().map(|wd| {
+                wd.download
+                    .get("time_to_first_byte_ms")
+                    .unwrap_or(&json!(0.0))
+                    .as_f64()
+                    .unwrap_or(0.0)
+                });
+            let sub_job_ttfb_sum = sub_job_ttfb.sum::<f64>();
+            let worker_count = sub_job.worker_data.len() as f64;
+            let average_ttfb = if worker_count > 0.0 {
+                sub_job_ttfb_sum / worker_count
+            } else {
+                0.0
+            };
+
             DownloadSpeed {
                 sub_job_id: sub_job.id,
                 download_speed: sub_job_download_speed.sum::<f64>(),
+                average_time_to_first_byte_ms: average_ttfb,
             }
         });
 
