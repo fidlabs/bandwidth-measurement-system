@@ -112,7 +112,8 @@ pub async fn handle_get_job(
                     .unwrap_or(&json!(0.0))
                     .as_f64()
                     .unwrap_or(0.0)
-                });
+            });
+
             let sub_job_ttfb_sum = sub_job_ttfb.sum::<f64>();
             let worker_count = sub_job.worker_data.len() as f64;
             let average_ttfb = if worker_count > 0.0 {
