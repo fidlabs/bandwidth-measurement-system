@@ -58,6 +58,7 @@ pub struct SubJobWithJob {
     pub job: Json<Job>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize, Type)]
 pub struct WorkerData {
     id: Uuid,
