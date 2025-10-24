@@ -59,6 +59,7 @@ pub struct SubJobWithData {
     pub worker_data: Vec<WorkerData>,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize, Deserialize, FromRow, Debug, Type, ToSchema, Clone)]
 pub struct WorkerData {
     pub id: Uuid,
@@ -69,6 +70,7 @@ pub struct WorkerData {
     pub head: serde_json::Value,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize, Deserialize, FromRow, Debug, Type)]
 pub struct WorkerDataDownload {
     end_time: DateTime<Utc>,
@@ -81,6 +83,7 @@ pub struct WorkerDataDownload {
     second_by_second_logs: Option<serde_json::Value>,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize, Deserialize, FromRow, Debug, Type)]
 pub struct WorkerDataError {
     error: String,
