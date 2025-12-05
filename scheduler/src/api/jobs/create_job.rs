@@ -159,11 +159,11 @@ pub async fn handle_create_job(
         .await
         .map_err(|_| internal_server_error("Failed to create scaling sub job"))?;
 
+    let working_sub_jobs = create_working_sub_jobs(&state, &job, target_worker_count).await?;
+
     let sub_jobs = vec![
         scaling_sub_job,
-        create_sub_job(&state, &job, SubJobDetails::partial(1)).await?,
-        create_sub_job(&state, &job, SubJobDetails::partial(80)).await?,
-        create_sub_job(&state, &job, SubJobDetails::empty()).await?,
+        ...working_sub_jobs,
     ];
 
     debug!(
@@ -209,6 +209,34 @@ async fn get_file_range_for_file(url: &str, size_mb: &i64) -> Result<(i64, i64),
     debug!("Selected range: {} - {}", start_range, end_range);
 
     Ok((start_range, end_range))
+}
+
+/// Dynamically create working sub jobs based on the worker count
+async fn create_working_sub_jobs(
+    state: &Arc<AppState>,
+    job: &Job,
+    worker_count: i64,
+) -> Result<Vec<SubJob>> {
+    let mut sub_job_details: Vec<SubJobDetails> = Vec::new();
+
+    match worker_count {
+        1 => sub_job_details.push(SubJobDetails::partial(100)),
+        2 => {
+            sub_job_details.push(SubJobDetails::partial(50));
+            sub_job_details.push(SubJobDetails::partial(100));
+        }
+        _ => {
+            sub_job_details.push(SubJobDetails::partial(1));
+            sub_job_details.push(SubJobDetails::partial(80));
+            sub_job_details.push(SubJobDetails::partial(100));
+        }
+    }
+
+    let sub_jobs = for details in sub_job_details {
+        create_sub_job(state, job, details).await?
+    };
+
+    Ok(sub_jobs)
 }
 
 async fn create_sub_job(
