@@ -161,10 +161,9 @@ pub async fn handle_create_job(
 
     let working_sub_jobs = create_working_sub_jobs(&state, &job, target_worker_count).await?;
 
-    let sub_jobs = vec![
-        scaling_sub_job,
-        ...working_sub_jobs,
-    ];
+    let sub_jobs: Vec<SubJob> = std::iter::once(scaling_sub_job)
+        .chain(working_sub_jobs)
+        .collect();
 
     debug!(
         "Job with sub jobs created successfully: {}, sub_jobs: {:?}",
@@ -216,7 +215,7 @@ async fn create_working_sub_jobs(
     state: &Arc<AppState>,
     job: &Job,
     worker_count: i64,
-) -> Result<Vec<SubJob>> {
+) -> Result<Vec<SubJob>, ApiResponse<()>> {
     let mut sub_job_details: Vec<SubJobDetails> = Vec::new();
 
     match worker_count {
@@ -232,9 +231,10 @@ async fn create_working_sub_jobs(
         }
     }
 
-    let sub_jobs = for details in sub_job_details {
-        create_sub_job(state, job, details).await?
-    };
+    let mut sub_jobs = Vec::new();
+    for details in sub_job_details {
+        sub_jobs.push(create_sub_job(state, job, details).await?);
+    }
 
     Ok(sub_jobs)
 }
