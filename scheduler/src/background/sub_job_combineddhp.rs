@@ -210,7 +210,7 @@ fn get_excluded_workers(
         .as_u64()
         .context("missing partial")? as usize;
 
-    if partial == 0 || partial >= 100 {
+    if partial == 0 || partial > 100 {
         bail!("invalid partial".to_string());
     }
 

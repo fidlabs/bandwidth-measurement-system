@@ -79,11 +79,6 @@ pub struct SubJobDetails {
     pub topic: Option<String>,
 }
 impl SubJobDetails {
-    pub fn empty() -> Self {
-        SubJobDetails {
-            ..Default::default()
-        }
-    }
     pub fn partial(partial: i64) -> Self {
         SubJobDetails {
             partial: Some(partial),
