@@ -7,7 +7,9 @@ use tracing::error;
 use utoipa::ToSchema;
 
 use crate::{
-    service_repository::ServiceWithTopics, service_scaler::ServiceScalerInfo, state::AppState,
+    service_repository::{Service, ServiceWithTopics},
+    service_scaler::ServiceScalerInfo,
+    state::AppState,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -60,7 +62,7 @@ pub async fn handle_get_services(
             .get_scaler(&service.provider_type)
         {
             service_info = scaler
-                .get_info(&service.to_service())
+                .get_info(&Service::from(&service))
                 .await
                 .inspect_err(|e| {
                     error!(

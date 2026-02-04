@@ -53,6 +53,19 @@ pub async fn process_pending_sub_jobs(
             // Geolocation benchmarks: parallel publish for Created, individual processing for others
             match sub_job.status {
                 crate::sub_job_repository::SubJobStatus::Created => {
+                    // Guard: ensure all scaling is complete before running benchmarks
+                    let has_pending_scaling = repo
+                        .sub_job
+                        .has_pending_scaling_for_job(sub_job.job_id)
+                        .await
+                        .map_err(|e| SubJobHandlerError::Skip(e.to_string()))?;
+
+                    if has_pending_scaling {
+                        return Err(SubJobHandlerError::Skip(
+                            "Waiting for scaling to complete".to_string(),
+                        ));
+                    }
+
                     // Parallel publishing for all Created geolocation benchmarks
                     info!(
                         "Processing geolocation benchmark sub-jobs in parallel for job {}",
@@ -160,6 +173,57 @@ pub async fn process_pending_sub_jobs(
                     e
                 ))),
             }
+        }
+        (JobType::Geolocation, SubJobType::Scaling) => {
+            // Get all scaling sub-jobs for this geolocation job
+            let all_scaling = repo
+                .sub_job
+                .get_all_pending_scaling_for_job(sub_job.job_id)
+                .await
+                .map_err(|e| SubJobHandlerError::Skip(e.to_string()))?;
+
+            if all_scaling.is_empty() {
+                return Err(SubJobHandlerError::Skip(
+                    "No pending scaling sub-jobs found".to_string(),
+                ));
+            }
+
+            info!(
+                "Processing {} geolocation scaling sub-jobs in parallel for job {}",
+                all_scaling.len(),
+                sub_job.job_id
+            );
+
+            let mut success_count = 0;
+            let mut failure_count = 0;
+
+            let mut join_set = JoinSet::new();
+            for scaling_sub_job in all_scaling {
+                let repo = repo.clone();
+                let scaler = service_scaler_registry.clone();
+                join_set.spawn(async move { process_scaling(repo, scaler, scaling_sub_job).await });
+            }
+
+            while let Some(result) = join_set.join_next().await {
+                match result {
+                    Ok(Ok(_)) => success_count += 1,
+                    Ok(Err(e)) => {
+                        error!("Geolocation scaling sub-job failed: {:?}", e);
+                        failure_count += 1;
+                    }
+                    Err(e) => {
+                        error!("Geolocation scaling task panicked: {:?}", e);
+                        failure_count += 1;
+                    }
+                }
+            }
+
+            info!(
+                "Geolocation scaling complete for job {}: {} succeeded, {} failed",
+                sub_job.job_id, success_count, failure_count
+            );
+
+            Ok(())
         }
         (_, SubJobType::Scaling) => {
             match process_scaling(repo.clone(), service_scaler_registry.clone(), sub_job).await {

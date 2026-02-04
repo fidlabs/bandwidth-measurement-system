@@ -38,16 +38,30 @@ pub struct ServiceWithTopics {
     pub topics: Vec<String>,
 }
 
-impl ServiceWithTopics {
-    pub fn to_service(&self) -> Service {
-        Service {
-            id: self.id,
-            name: self.name.clone(),
-            provider_type: self.provider_type.clone(),
-            details: self.details.clone(),
-            is_enabled: self.is_enabled,
-            location: self.location.clone(),
-            descale_at: self.descale_at,
+impl From<ServiceWithTopics> for Service {
+    fn from(s: ServiceWithTopics) -> Self {
+        Self {
+            id: s.id,
+            name: s.name,
+            provider_type: s.provider_type,
+            details: s.details,
+            is_enabled: s.is_enabled,
+            location: s.location,
+            descale_at: s.descale_at,
+        }
+    }
+}
+
+impl From<&ServiceWithTopics> for Service {
+    fn from(s: &ServiceWithTopics) -> Self {
+        Self {
+            id: s.id,
+            name: s.name.clone(),
+            provider_type: s.provider_type.clone(),
+            details: s.details.clone(),
+            is_enabled: s.is_enabled,
+            location: s.location.clone(),
+            descale_at: s.descale_at,
         }
     }
 }

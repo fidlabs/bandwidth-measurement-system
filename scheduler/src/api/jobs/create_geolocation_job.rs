@@ -74,6 +74,23 @@ pub async fn handle_create_geolocation_job(
         return Err(bad_request("No locations configured"));
     }
 
+    // Validate each location has services with matching topic
+    for location in &locations {
+        let services = state
+            .repo
+            .service
+            .get_services_enabled_by_topic(location)
+            .await
+            .map_err(|_| internal_server_error("Failed to validate location"))?;
+
+        if services.is_empty() {
+            return Err(bad_request(format!(
+                "Location '{}' has no services with matching topic",
+                location
+            )));
+        }
+    }
+
     debug!("Found {} locations: {:?}", locations.len(), locations);
 
     // Validate URL and get file range (with SSRF protection)
@@ -108,42 +125,41 @@ pub async fn handle_create_geolocation_job(
 
     debug!("Geolocation job created: {:?}", job);
 
-    // Create scaling sub-job (topic="all")
-    let scaling_sub_job = state
-        .repo
-        .sub_job
-        .create_sub_job(
+    // Build all sub-jobs for batch insert
+    let mut sub_jobs_to_create = Vec::with_capacity(locations.len() * 2);
+
+    for location in &locations {
+        // Scaling sub-job
+        sub_jobs_to_create.push((
             Uuid::new_v4(),
             job.id,
             SubJobStatus::Created,
             SubJobType::Scaling,
-            SubJobDetails::topic("all".to_string()),
-        )
-        .await
-        .map_err(|_| internal_server_error("Failed to create scaling sub job"))?;
+            SubJobDetails::topic(location.clone()),
+        ));
 
-    debug!("Scaling sub-job created: {:?}", scaling_sub_job);
-
-    // Create benchmark sub-jobs (one per location)
-    for location in &locations {
-        let benchmark_sub_job = state
-            .repo
-            .sub_job
-            .create_sub_job(
-                Uuid::new_v4(),
-                job.id,
-                SubJobStatus::Created,
-                SubJobType::CombinedDHP,
-                SubJobDetails::topic(location.clone()),
-            )
-            .await
-            .map_err(|_| internal_server_error("Failed to create benchmark sub job"))?;
-
-        debug!(
-            "Benchmark sub-job created for {}: {:?}",
-            location, benchmark_sub_job
-        );
+        // Benchmark sub-job with explicit partial: 100
+        sub_jobs_to_create.push((
+            Uuid::new_v4(),
+            job.id,
+            SubJobStatus::Created,
+            SubJobType::CombinedDHP,
+            SubJobDetails::topic(location.clone()).with_partial(100),
+        ));
     }
+
+    // Single atomic insert for all sub-jobs
+    state
+        .repo
+        .sub_job
+        .create_sub_jobs_batch(sub_jobs_to_create)
+        .await
+        .map_err(|_| internal_server_error("Failed to create sub jobs"))?;
+
+    debug!(
+        "Created {} sub-jobs for geolocation job",
+        locations.len() * 2
+    );
 
     Ok(ok_response(CreateGeolocationJobResponse {
         job_id: job.id,

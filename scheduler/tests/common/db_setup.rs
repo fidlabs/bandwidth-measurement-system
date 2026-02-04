@@ -1,6 +1,7 @@
 // scheduler/tests/common/db_setup.rs
 
 use sqlx::PgPool;
+use tracing::info;
 
 pub struct TestDatabase {
     pub pool: PgPool,
@@ -75,7 +76,7 @@ impl TestDatabase {
 impl Drop for TestDatabase {
     fn drop(&mut self) {
         if std::env::var("KEEP_TEST_DB").is_ok() {
-            println!("Keeping test database: {}", self.name);
+            info!("Keeping test database: {}", self.name);
             return;
         }
         // Note: Actual cleanup happens when pool is dropped

@@ -2,6 +2,7 @@
 
 use crate::common::*;
 use std::time::Instant;
+use tracing::info;
 use uuid::Uuid;
 
 /// Stress test: Create 10 concurrent geolocation jobs
@@ -68,7 +69,7 @@ async fn test_concurrent_geolocation_job_creation() {
     let unique_ids: std::collections::HashSet<_> = job_ids.iter().collect();
     assert_eq!(unique_ids.len(), num_jobs, "All job IDs should be unique");
 
-    // Verify each job has correct sub-jobs (1 scaling + 3 benchmarks = 4 total)
+    // Verify each job has correct sub-jobs (3 scaling + 3 benchmarks = 6 total)
     for job_id in &job_ids {
         let sub_job_count =
             sqlx::query_scalar!(r#"SELECT COUNT(*) FROM sub_jobs WHERE job_id = $1"#, job_id)
@@ -78,8 +79,8 @@ async fn test_concurrent_geolocation_job_creation() {
                 .unwrap_or(0);
 
         assert_eq!(
-            sub_job_count, 4,
-            "Job {} should have 4 sub-jobs (1 scaling + 3 benchmarks), got {}",
+            sub_job_count, 6,
+            "Job {} should have 6 sub-jobs (3 scaling + 3 benchmarks), got {}",
             job_id, sub_job_count
         );
     }
@@ -97,7 +98,7 @@ async fn test_concurrent_geolocation_job_creation() {
         num_jobs
     );
 
-    // Verify total sub-jobs in database (10 jobs * 4 sub-jobs each = 40)
+    // Verify total sub-jobs in database (10 jobs * 6 sub-jobs each = 60)
     let total_sub_jobs = sqlx::query_scalar!(r#"SELECT COUNT(*) FROM sub_jobs"#)
         .fetch_one(ctx.pool())
         .await
@@ -106,15 +107,15 @@ async fn test_concurrent_geolocation_job_creation() {
 
     assert_eq!(
         total_sub_jobs,
-        (num_jobs * 4) as i64,
+        (num_jobs * 6) as i64,
         "Database should contain {} sub-jobs",
-        num_jobs * 4
+        num_jobs * 6
     );
 
-    println!(
+    info!(
         "Created {} geolocation jobs with {} total sub-jobs in {:?}",
         num_jobs,
-        num_jobs * 4,
+        num_jobs * 6,
         elapsed
     );
 }
@@ -225,7 +226,7 @@ async fn test_concurrent_bandwidth_job_creation() {
         num_jobs * 4
     );
 
-    println!(
+    info!(
         "Created {} bandwidth jobs with {} total sub-jobs in {:?}",
         num_jobs,
         num_jobs * 4,
@@ -332,40 +333,36 @@ async fn test_mixed_concurrent_job_creation() {
             .unwrap()
             .unwrap_or(0);
 
-    let bw_count = sqlx::query_scalar!(
-        r#"SELECT COUNT(*) FROM jobs WHERE job_type = 'bandwidth_saturation'"#
-    )
-    .fetch_one(ctx.pool())
-    .await
-    .unwrap()
-    .unwrap_or(0);
+    let bw_count =
+        sqlx::query_scalar!(r#"SELECT COUNT(*) FROM jobs WHERE job_type = 'bandwidth_saturation'"#)
+            .fetch_one(ctx.pool())
+            .await
+            .unwrap()
+            .unwrap_or(0);
 
     assert_eq!(geo_count, num_geo_jobs as i64);
     assert_eq!(bw_count, num_bw_jobs as i64);
 
     // Verify sub-job counts
-    // Geolocation: 5 jobs * 4 sub-jobs = 20
+    // Geolocation: 5 jobs * 6 sub-jobs = 30
     // Bandwidth: 5 jobs * 4 sub-jobs = 20
-    // Total: 40
+    // Total: 50
     let total_sub_jobs = sqlx::query_scalar!(r#"SELECT COUNT(*) FROM sub_jobs"#)
         .fetch_one(ctx.pool())
         .await
         .unwrap()
         .unwrap_or(0);
 
+    let expected_sub_jobs = (num_geo_jobs * 6 + num_bw_jobs * 4) as i64;
     assert_eq!(
-        total_sub_jobs,
-        ((num_geo_jobs + num_bw_jobs) * 4) as i64,
+        total_sub_jobs, expected_sub_jobs,
         "Should have {} total sub-jobs",
-        (num_geo_jobs + num_bw_jobs) * 4
+        expected_sub_jobs
     );
 
-    println!(
+    info!(
         "Created {} geolocation + {} bandwidth jobs ({} total sub-jobs) in {:?}",
-        num_geo_jobs,
-        num_bw_jobs,
-        (num_geo_jobs + num_bw_jobs) * 4,
-        elapsed
+        num_geo_jobs, num_bw_jobs, expected_sub_jobs, elapsed
     );
 }
 
@@ -472,19 +469,18 @@ async fn test_database_integrity_under_concurrent_load() {
     }
 
     // Verify job statuses are consistent (using PascalCase enum value)
-    let pending_jobs =
-        sqlx::query_scalar!(r#"SELECT COUNT(*) FROM jobs WHERE status = 'Pending'"#)
-            .fetch_one(ctx.pool())
-            .await
-            .unwrap()
-            .unwrap_or(0);
+    let pending_jobs = sqlx::query_scalar!(r#"SELECT COUNT(*) FROM jobs WHERE status = 'Pending'"#)
+        .fetch_one(ctx.pool())
+        .await
+        .unwrap()
+        .unwrap_or(0);
 
     assert_eq!(
         pending_jobs, num_jobs as i64,
         "All jobs should be in 'Pending' status after creation"
     );
 
-    println!(
+    info!(
         "Database integrity verified for {} concurrent jobs with {} sub-jobs",
         num_jobs,
         num_jobs * 4

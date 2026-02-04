@@ -22,10 +22,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Initialize color_eyre panic and error handlers
     color_eyre::install()?;
 
-    // Load .env
-    dotenvy::dotenv()
-        .inspect_err(|_| eprintln!("Failed to read .env file, ignoring."))
-        .ok();
+    // Load .env (optional, ignore if missing)
+    dotenvy::dotenv().ok();
 
     // Initialize logging
     tracing_subscriber::fmt()

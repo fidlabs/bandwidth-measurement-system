@@ -5,9 +5,12 @@
 -- docker-compose.yml worker services structure.
 --
 -- Services configured:
---   - worker_eu_pl  (Europe/Poland/Rzeszow)
---   - worker_usa_la (USA/California/Los Angeles)
---   - worker_eu_es  (Europe/Spain/Alicante)
+--   - worker_eu_pl  (Europe/Poland/Rzeszow)  location: europe
+--   - worker_usa_la (USA/California/Los Angeles)  location: usa
+--   - worker_eu_es  (Europe/Spain/Alicante)  location: spain
+--
+-- The location field is required for geolocation jobs to identify which
+-- geographic region each service represents.
 -- ============================================================================
 
 BEGIN;
@@ -38,28 +41,32 @@ INSERT INTO services (
     name,
     provider_type,
     is_enabled,
-    details
+    details,
+    location
 ) VALUES
     (
         'a1111111-1111-1111-1111-111111111111'::uuid,
         'worker_eu_pl',
         'docker_local'::provider_type,
         true,
-        '{}'::jsonb
+        '{}'::jsonb,
+        'europe'
     ),
     (
         'a2222222-2222-2222-2222-222222222222'::uuid,
         'worker_usa_la',
         'docker_local'::provider_type,
         true,
-        '{}'::jsonb
+        '{}'::jsonb,
+        'usa'
     ),
     (
         'a3333333-3333-3333-3333-333333333333'::uuid,
         'worker_eu_es',
         'docker_local'::provider_type,
         true,
-        '{}'::jsonb
+        '{}'::jsonb,
+        'spain'
     )
 ON CONFLICT (id) DO NOTHING;
 

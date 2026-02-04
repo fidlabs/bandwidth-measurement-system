@@ -99,17 +99,12 @@ async fn process_status_created(
 
     let job_message = Message::WorkerJob {
         job_id: sub_job.job_id,
-        payload: JobMessage {
-            job_id: sub_job.job_id,
-            sub_job_id: sub_job.id,
-            url: sub_job.job.url.clone(),
+        payload: JobMessage::new(
+            sub_job.job_params(),
             start_time,
             download_start_time,
-            start_range: sub_job.job.details.start_range,
-            end_range: sub_job.job.details.end_range,
             excluded_workers,
-            log_interval_ms: sub_job.job.details.log_interval_ms,
-        },
+        ),
     };
 
     debug!("Publishing job message: {:?}", job_message);

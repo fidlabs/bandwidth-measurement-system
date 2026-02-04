@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                sub_jobs.id,\n                sub_jobs.job_id,\n                sub_jobs.status as \"status: SubJobStatus\",\n                sub_jobs.type as \"type: SubJobType\",\n                sub_jobs.details,\n                sub_jobs.deadline_at,\n                JSON_BUILD_OBJECT(\n                    'id', jobs.id,\n                    'url', jobs.url,\n                    'routing_key', jobs.routing_key,\n                    'status', jobs.status,\n                    'job_type', jobs.job_type,\n                    'details', jobs.details\n                ) as \"job!: Json<Job>\"\n            FROM sub_jobs\n            INNER JOIN jobs ON sub_jobs.job_id = jobs.id\n            WHERE sub_jobs.status = $1\n               OR sub_jobs.status = $2\n               OR sub_jobs.status = $3\n            ORDER BY sub_jobs.created_at ASC\n            LIMIT 1\n            ",
+  "query": "\n            SELECT\n                sub_jobs.id,\n                sub_jobs.job_id,\n                sub_jobs.status as \"status: SubJobStatus\",\n                sub_jobs.type as \"type: SubJobType\",\n                sub_jobs.details,\n                sub_jobs.deadline_at,\n                JSON_BUILD_OBJECT(\n                    'id', jobs.id,\n                    'url', jobs.url,\n                    'routing_key', jobs.routing_key,\n                    'status', jobs.status,\n                    'job_type', jobs.job_type,\n                    'details', jobs.details\n                ) as \"job!: Json<Job>\"\n            FROM sub_jobs\n            INNER JOIN jobs ON sub_jobs.job_id = jobs.id\n            WHERE sub_jobs.job_id = $1\n              AND sub_jobs.type = $2\n              AND (sub_jobs.status = $3 OR sub_jobs.status = $4 OR sub_jobs.status = $5)\n            ORDER BY sub_jobs.created_at ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -65,6 +65,18 @@
     ],
     "parameters": {
       "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "sub_job_type",
+            "kind": {
+              "Enum": [
+                "CombinedDHP",
+                "Scaling"
+              ]
+            }
+          }
+        },
         {
           "Custom": {
             "name": "sub_job_status",
@@ -122,5 +134,5 @@
       null
     ]
   },
-  "hash": "e29ea5c287af70f0aa2be122249f8d129d3d0c64f6e1ac660938e9cd14e00978"
+  "hash": "3af2b19631b782ee9d07f270047ee36b81ab7095ff38448ca17f70b0afb23b3d"
 }

@@ -115,7 +115,7 @@ async fn test_geolocation_job_creates_correct_sub_jobs() {
 
     assert_eq!(job.job_type, Some("geolocation".to_string()));
 
-    // Verify sub-jobs: should be 1 scaling + 3 benchmarks = 4 total
+    // Verify sub-jobs: should be 3 scaling + 3 benchmarks = 6 total
     let sub_jobs = sqlx::query!(
         r#"SELECT type::text as sub_type, details->>'topic' as topic
            FROM sub_jobs WHERE job_id = $1"#,
@@ -127,8 +127,8 @@ async fn test_geolocation_job_creates_correct_sub_jobs() {
 
     assert_eq!(
         sub_jobs.len(),
-        4,
-        "Should have 4 sub-jobs (1 scaling + 3 benchmarks)"
+        6,
+        "Should have 6 sub-jobs (3 scaling + 3 benchmarks)"
     );
 
     // Count by type (enum values are PascalCase in database)
@@ -141,7 +141,7 @@ async fn test_geolocation_job_creates_correct_sub_jobs() {
         .filter(|s| s.sub_type == Some("CombinedDHP".to_string()))
         .count();
 
-    assert_eq!(scaling_count, 1, "Should have 1 scaling sub-job");
+    assert_eq!(scaling_count, 3, "Should have 3 scaling sub-jobs");
     assert_eq!(benchmark_count, 3, "Should have 3 benchmark sub-jobs");
 
     // Verify benchmark topics match locations
@@ -154,6 +154,17 @@ async fn test_geolocation_job_creates_correct_sub_jobs() {
     assert!(benchmark_topics.contains(&"europe".to_string()));
     assert!(benchmark_topics.contains(&"usa".to_string()));
     assert!(benchmark_topics.contains(&"asia".to_string()));
+
+    // Verify scaling topics match locations
+    let scaling_topics: Vec<String> = sub_jobs
+        .iter()
+        .filter(|s| s.sub_type == Some("Scaling".to_string()))
+        .filter_map(|s| s.topic.clone())
+        .collect();
+
+    assert!(scaling_topics.contains(&"europe".to_string()));
+    assert!(scaling_topics.contains(&"usa".to_string()));
+    assert!(scaling_topics.contains(&"asia".to_string()));
 }
 
 #[tokio::test]

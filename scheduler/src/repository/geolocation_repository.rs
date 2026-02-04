@@ -27,8 +27,22 @@ pub struct LocationResult {
 pub enum LocationStatus {
     Completed,
     Failed,
+    Canceled,
     Processing,
     Pending,
+}
+
+impl From<Option<&str>> for LocationStatus {
+    fn from(s: Option<&str>) -> Self {
+        match s {
+            Some("Completed") => Self::Completed,
+            Some("Failed") => Self::Failed,
+            Some("Canceled") => Self::Canceled,
+            Some("Processing") => Self::Processing,
+            Some("Pending") | Some("Created") => Self::Pending,
+            _ => Self::Pending,
+        }
+    }
 }
 
 impl GeolocationRepository {
@@ -63,13 +77,8 @@ impl GeolocationRepository {
             let location = sub_job.location.unwrap_or_else(|| "unknown".to_string());
             let sub_job_id = sub_job.id;
 
-            // Map sub-job status to location status
-            let location_status = match sub_job.status.as_deref() {
-                Some("completed") => LocationStatus::Completed,
-                Some("failed") | Some("canceled") => LocationStatus::Failed,
-                Some("processing") | Some("pending") => LocationStatus::Processing,
-                _ => LocationStatus::Pending,
-            };
+            // Map sub-job status to location status (database stores PascalCase enum values)
+            let location_status: LocationStatus = sub_job.status.as_deref().into();
 
             // If completed, get aggregated metrics
             let (ttfb_ms, bandwidth_mbps, worker_count) =
@@ -79,14 +88,11 @@ impl GeolocationRepository {
                     SELECT
                         AVG((d.download->>'time_to_first_byte_ms')::float) as "avg_ttfb",
                         AVG((d.download->>'download_speed')::float) as "avg_bandwidth",
-                        COUNT(DISTINCT w.worker_name) as "worker_count"
+                        COUNT(DISTINCT d.worker_name) as "worker_count"
                     FROM worker_data d
-                    JOIN workers w ON d.worker_name = w.worker_name
-                    JOIN services s ON w.service_id = s.id
-                    WHERE d.sub_job_id = $1 AND s.location = $2
+                    WHERE d.sub_job_id = $1
                     "#,
-                        sub_job_id,
-                        location
+                        sub_job_id
                     )
                     .fetch_one(&self.pool)
                     .await
@@ -101,7 +107,9 @@ impl GeolocationRepository {
                     (None, None, None)
                 };
 
-            let error = if location_status == LocationStatus::Failed {
+            let error = if location_status == LocationStatus::Failed
+                || location_status == LocationStatus::Canceled
+            {
                 sub_job.error
             } else {
                 None
@@ -129,6 +137,9 @@ impl GeolocationRepository {
         Ok(results)
     }
 
+    /// Calculate the closest location based on lowest TTFB among completed results.
+    /// Only considers locations with status=Completed and valid ttfb_ms.
+    /// Ignores Failed, Canceled, Processing, and Pending locations.
     pub fn calculate_closest_location(location_results: &[LocationResult]) -> Option<String> {
         location_results
             .iter()
@@ -213,5 +224,29 @@ mod tests {
         let results = vec![make_result("europe", LocationStatus::Completed, Some(50.0))];
         let closest = GeolocationRepository::calculate_closest_location(&results);
         assert_eq!(closest, Some("europe".to_string()));
+    }
+
+    #[test]
+    fn test_calculate_closest_location_ignores_canceled() {
+        let results = vec![
+            make_result("europe", LocationStatus::Canceled, Some(10.0)), // lowest but canceled
+            make_result("usa", LocationStatus::Completed, Some(120.0)),
+            make_result("asia", LocationStatus::Completed, Some(200.0)),
+        ];
+
+        let closest = GeolocationRepository::calculate_closest_location(&results);
+        assert_eq!(closest, Some("usa".to_string()));
+    }
+
+    #[test]
+    fn test_calculate_closest_location_mixed_terminal_states() {
+        let results = vec![
+            make_result("europe", LocationStatus::Canceled, Some(10.0)),
+            make_result("usa", LocationStatus::Failed, Some(20.0)),
+            make_result("asia", LocationStatus::Completed, Some(200.0)),
+        ];
+
+        let closest = GeolocationRepository::calculate_closest_location(&results);
+        assert_eq!(closest, Some("asia".to_string()));
     }
 }

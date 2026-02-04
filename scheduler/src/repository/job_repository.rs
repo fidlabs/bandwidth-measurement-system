@@ -138,7 +138,32 @@ impl JobDetails {
 }
 impl From<serde_json::Value> for JobDetails {
     fn from(value: serde_json::Value) -> Self {
-        serde_json::from_value(value).expect("Failed to convert serde_json::Value to JobDetails")
+        match serde_json::from_value(value.clone()) {
+            Ok(details) => details,
+            Err(e) => {
+                tracing::error!(
+                    "Failed to deserialize JobDetails from database value: {}. Value: {:?}",
+                    e,
+                    value
+                );
+                JobDetails::default()
+            }
+        }
+    }
+}
+
+impl Default for JobDetails {
+    fn default() -> Self {
+        JobDetails {
+            start_range: 0,
+            end_range: 0,
+            target_worker_count: None,
+            workers_count: None,
+            entity: None,
+            note: None,
+            log_interval_ms: 1000,
+            size_mb: 100,
+        }
     }
 }
 
@@ -190,7 +215,10 @@ impl JobRepository {
             routing_key,
             status as JobStatus,
             job_type as JobType,
-            serde_json::to_value(details).unwrap(),
+            // JobDetails contains only primitive types (i64, Option<String>), so serialization
+            // cannot fail. We use expect() to document this invariant while still catching
+            // any future changes that might break this assumption.
+            serde_json::to_value(details).expect("JobDetails serialization cannot fail"),
         )
         .fetch_one(&self.pool)
         .await?;
