@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE services\n            SET is_enabled = $2\n            WHERE id = $1\n            RETURNING id, name, provider_type as \"provider_type!: ProviderType\", details, is_enabled, descale_at\n            ",
+  "query": "\n            SELECT id, name, provider_type as \"provider_type!: ProviderType\", details, is_enabled, location, descale_at\n            FROM services as s\n            JOIN service_topics as st ON s.id = st.service_id\n            WHERE st.topic_id = (\n                SELECT id FROM topics WHERE name = $1\n            ) AND s.is_enabled = TRUE\n            ",
   "describe": {
     "columns": [
       {
@@ -40,14 +40,18 @@
       },
       {
         "ordinal": 5,
+        "name": "location",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
         "name": "descale_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Bool"
+        "Text"
       ]
     },
     "nullable": [
@@ -56,8 +60,9 @@
       false,
       false,
       false,
+      true,
       true
     ]
   },
-  "hash": "20f06205eb5b56c8d46557a69db667eba4cc423bbbf1da809dd12830ba51b3b2"
+  "hash": "b460ba17d56373ba495cf920a860e6a19c130076e9c19a21367c2a8b3163d7e6"
 }

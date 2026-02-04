@@ -1,4 +1,8 @@
-.PHONY: check format lint docs build stop run logs run-logs restart restart-logs services prepare rabbitmq r rm-symlink symlink migration migrate revert remigrate
+# Makefile
+include .env
+export
+
+.PHONY: check format lint docs build stop run logs run-logs restart restart-logs services prepare rabbitmq r rm-symlink symlink migration migrate-up migrate-down migrate-status remigrate init-dev
 
 migration_source = $(PWD)/scheduler/src/migrations
 
@@ -28,6 +32,9 @@ build:
 
 stop:
 	@docker compose down
+
+clear:
+	@docker compose down -v
 
 stop-app:
 	@-docker compose down scheduler
@@ -61,7 +68,10 @@ rm-symlink:
 
 # required for the scheduler to access files from host to spawn new docker containers seamlessly on the host
 symlink:
-	ln -s "$(PWD)" /tmp/bms
+	@if [ ! -L /tmp/bms ] || [ "$$(readlink /tmp/bms)" != "$(PWD)" ]; then \
+		rm -rf /tmp/bms; \
+		ln -s "$(PWD)" /tmp/bms; \
+	fi
 
 # Usage: make migration name=migration_name
 # For some reason add with -r and --source doesnt produce up and down files in the correct directory, so we move them manually
@@ -70,10 +80,18 @@ migration:
 	@sqlx migrate add -r $(name)
 	mv migrations/* $(migration_source)/
 
-migrate:
+migrate-up:
 	@cargo sqlx migrate run --source $(migration_source)
 
-revert:
+migrate-down:
 	@cargo sqlx migrate revert --source $(migration_source)
 
-remigrate: revert migrate
+migrate-status:
+	@cargo sqlx migrate info --source $(migration_source)
+
+remigrate: migrate-down migrate-up
+
+init-dev: services symlink
+	@until pg_isready -h localhost -p 5442 -U pguser > /dev/null 2>&1; do sleep 1; done
+	@$(MAKE) migrate-up
+	@$(PWD)/scripts/init_local_services.sh

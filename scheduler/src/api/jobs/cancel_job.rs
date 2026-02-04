@@ -31,7 +31,7 @@ pub struct CancelJobResponse(pub JobWithSubJobs);
     path = "/jobs/{job_id}",
     params (CancelJobPathParams),
     description = r#"
-**Cancel a job and all its sub job.s**
+**Cancel a job and all its sub jobs.**
 "#,
     responses(
         (status = 200, description = "Job Canceled", body = CancelJobResponse),

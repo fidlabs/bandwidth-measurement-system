@@ -1,0 +1,126 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                sub_jobs.id,\n                sub_jobs.job_id,\n                sub_jobs.status as \"status: SubJobStatus\",\n                sub_jobs.type as \"type: SubJobType\",\n                sub_jobs.details,\n                sub_jobs.deadline_at,\n                JSON_BUILD_OBJECT(\n                    'id', jobs.id,\n                    'url', jobs.url,\n                    'routing_key', jobs.routing_key,\n                    'status', jobs.status,\n                    'job_type', jobs.job_type,\n                    'details', jobs.details\n                ) as \"job!: Json<Job>\"\n            FROM sub_jobs\n            INNER JOIN jobs ON sub_jobs.job_id = jobs.id\n            WHERE sub_jobs.status = $1\n               OR sub_jobs.status = $2\n               OR sub_jobs.status = $3\n            ORDER BY sub_jobs.created_at ASC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "job_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "status: SubJobStatus",
+        "type_info": {
+          "Custom": {
+            "name": "sub_job_status",
+            "kind": {
+              "Enum": [
+                "Created",
+                "Pending",
+                "Processing",
+                "Completed",
+                "Failed",
+                "Canceled"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "type: SubJobType",
+        "type_info": {
+          "Custom": {
+            "name": "sub_job_type",
+            "kind": {
+              "Enum": [
+                "CombinedDHP",
+                "Scaling"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "details",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "deadline_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "job!: Json<Job>",
+        "type_info": "Json"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "sub_job_status",
+            "kind": {
+              "Enum": [
+                "Created",
+                "Pending",
+                "Processing",
+                "Completed",
+                "Failed",
+                "Canceled"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "sub_job_status",
+            "kind": {
+              "Enum": [
+                "Created",
+                "Pending",
+                "Processing",
+                "Completed",
+                "Failed",
+                "Canceled"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "sub_job_status",
+            "kind": {
+              "Enum": [
+                "Created",
+                "Pending",
+                "Processing",
+                "Completed",
+                "Failed",
+                "Canceled"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "e29ea5c287af70f0aa2be122249f8d129d3d0c64f6e1ac660938e9cd14e00978"
+}

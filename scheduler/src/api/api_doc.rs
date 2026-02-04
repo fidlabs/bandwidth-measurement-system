@@ -5,16 +5,20 @@ use utoipa::{Modify, OpenApi};
 use crate::{
     api::{
         healthcheck,
-        jobs::{cancel_job, create_job, get_job, get_jobs},
+        jobs::{cancel_job, create_geolocation_job, create_job, get_job, get_jobs},
         services::{
             create_service, delete_service, get_services, services_info, services_scale_down,
             services_scale_down_all, services_scale_up, update_service,
         },
     },
-    job_repository, service_repository, service_scaler, sub_job_repository,
+    job_repository,
+    repository::geolocation_repository,
+    service_repository, service_scaler, sub_job_repository,
 };
 
 // SecurityAddon struct to add security schemes
+// Used by utoipa derive macro via modifiers(&SecurityAddon), not constructed directly
+#[allow(dead_code)]
 struct SecurityAddon;
 impl Modify for SecurityAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
@@ -47,6 +51,7 @@ Creating a Job requires an endpoint URL to a file (e.g. piece) as well as a rout
         cancel_job::handle_cancel_job,
         get_jobs::handle_get_jobs,
         get_job::handle_get_job,
+        create_geolocation_job::handle_create_geolocation_job,
         // Services
         create_service::handle_create_service,
         delete_service::handle_delete_service,
@@ -66,12 +71,17 @@ Creating a Job requires an endpoint URL to a file (e.g. piece) as well as a rout
             create_job::CreateJobInput,
             create_job::CreateJobResponse,
 
+            create_geolocation_job::CreateGeolocationJobInput,
+            create_geolocation_job::CreateGeolocationJobResponse,
+
             get_jobs::GetJobsQueryParams,
             get_jobs::GetJobsResponse,
 
             get_job::GetJobPathParams,
+            get_job::GetJobQueryParams,
             get_job::GetJobResponse,
             get_job::JobSummary,
+            get_job::DownloadSpeed,
 
             // Services Schemas
             create_service::CreateServiceInput,
@@ -109,6 +119,7 @@ Creating a Job requires an endpoint URL to a file (e.g. piece) as well as a rout
             // Additional Schemas
             job_repository::Job,
             job_repository::JobStatus,
+            job_repository::JobType,
             job_repository::JobWithSubJobsWithData,
             job_repository::SubJobWithData,
             job_repository::WorkerData,
@@ -123,6 +134,10 @@ Creating a Job requires an endpoint URL to a file (e.g. piece) as well as a rout
             sub_job_repository::SubJobStatus,
 
             service_scaler::ServiceScalerInfo,
+
+            // Geolocation Schemas
+            geolocation_repository::LocationResult,
+            geolocation_repository::LocationStatus,
         ),
       ),
     modifiers(&SecurityAddon),

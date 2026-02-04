@@ -7,6 +7,7 @@ use crate::service_repository::Service;
 
 use super::{ServiceScaler, ServiceScalerError, ServiceScalerInfo};
 
+#[derive(Default)]
 pub struct DockerScaler;
 
 #[async_trait]

@@ -18,7 +18,10 @@ pub struct ServicesScaleInfoPathInput {
     pub service_id: Uuid,
 }
 
+// OpenAPI schema wrapper - handler returns ServiceScalerInfo directly
+#[allow(dead_code)]
 #[derive(Serialize, ToSchema)]
+#[serde(transparent)]
 pub struct ServicesScaleInfoResponse(pub ServiceScalerInfo);
 
 /// Get scaling info about service

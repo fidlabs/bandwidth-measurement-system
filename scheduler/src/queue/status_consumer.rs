@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use crate::{state::AppState, sub_job_repository::SubJobStatus};
+use crate::{
+    state::AppState, sub_job_repository::SubJobStatus, worker_repository::WorkerRepository,
+};
 use amqprs::{
     channel::{BasicAckArguments, Channel},
     consumer::AsyncConsumer,
@@ -10,7 +12,7 @@ use async_trait::async_trait;
 use color_eyre::{eyre::eyre, Result};
 use rabbitmq::{Message, StatusMessage, WorkerStatus, WorkerStatusDetails};
 use serde_json;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 #[derive(Clone)]
 pub struct StatusConsumer {
@@ -40,6 +42,35 @@ impl StatusConsumer {
 
         match status_message.status {
             WorkerStatusDetails::Lifecycle(status) => {
+                // Parse service name from worker_name and lookup service
+                let service_id = if let Some(service_name) =
+                    WorkerRepository::parse_service_name(&status_message.worker_name)
+                {
+                    match self
+                        .state
+                        .repo
+                        .service
+                        .get_service_by_name(&service_name)
+                        .await
+                    {
+                        Ok(service) => Some(service.id),
+                        Err(e) => {
+                            warn!(
+                                "Failed to find service '{}' for worker '{}': {}",
+                                service_name, status_message.worker_name, e
+                            );
+                            None
+                        }
+                    }
+                } else {
+                    warn!(
+                        "Could not parse service name from worker_name: {}",
+                        status_message.worker_name
+                    );
+                    None
+                };
+
+                // Update worker status with service_id
                 self.state
                     .repo
                     .worker
@@ -47,6 +78,7 @@ impl StatusConsumer {
                         &status_message.worker_name,
                         &status.worker_status,
                         status_message.timestamp,
+                        service_id,
                     )
                     .await?;
 

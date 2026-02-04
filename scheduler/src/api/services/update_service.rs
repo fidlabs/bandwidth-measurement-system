@@ -23,6 +23,8 @@ pub struct UpdateServiceInput {
     pub is_enabled: bool,
 }
 
+// OpenAPI schema wrapper - handler returns Service directly
+#[allow(dead_code)]
 #[derive(Serialize, ToSchema)]
 pub struct UpdateServiceResponse(pub Service);
 

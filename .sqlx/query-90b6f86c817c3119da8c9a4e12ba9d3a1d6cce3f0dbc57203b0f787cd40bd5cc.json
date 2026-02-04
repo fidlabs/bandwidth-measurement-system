@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT location\n            FROM services\n            WHERE is_enabled = true AND location IS NOT NULL\n            ORDER BY location\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "location",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "90b6f86c817c3119da8c9a4e12ba9d3a1d6cce3f0dbc57203b0f787cd40bd5cc"
+}

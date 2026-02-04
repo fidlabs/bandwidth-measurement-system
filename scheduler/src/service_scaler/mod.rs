@@ -12,7 +12,7 @@ use utoipa::ToSchema;
 
 use crate::{
     config::CONFIG,
-    service_repository::{ProviderType, Service},
+    repository::service_repository::{ProviderType, Service},
 };
 
 #[derive(Debug)]
@@ -92,6 +92,9 @@ pub struct ServiceScalerRegistry {
 }
 
 impl ServiceScalerRegistry {
+    // new() reads CONFIG and creates different scalers based on environment,
+    // which doesn't fit Default trait semantics (should be side-effect free)
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         let mut scalers: HashMap<ProviderType, Arc<dyn ServiceScaler>> = HashMap::new();
 
@@ -102,6 +105,11 @@ impl ServiceScalerRegistry {
             scalers.insert(ProviderType::AWSFargate, Arc::new(FargateScaler::new()));
         }
 
+        Self { scalers }
+    }
+
+    /// Create registry with custom scalers (for testing)
+    pub fn new_with_scalers(scalers: HashMap<ProviderType, Arc<dyn ServiceScaler>>) -> Self {
         Self { scalers }
     }
 

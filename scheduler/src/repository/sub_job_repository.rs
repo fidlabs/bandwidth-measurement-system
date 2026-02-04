@@ -58,6 +58,22 @@ pub struct SubJobWithJob {
     pub job: Json<Job>,
 }
 
+impl SubJobWithJob {
+    /// Returns the topic from sub-job details if present.
+    pub fn topic(&self) -> Option<&str> {
+        self.details.get("topic").and_then(|v| v.as_str())
+    }
+
+    /// Returns the effective routing key for this sub-job.
+    /// Prefers topic from details, falls back to job's routing_key for backward compatibility
+    /// with old jobs that don't have topic in CombinedDHP sub-job details.
+    pub fn effective_routing_key(&self) -> String {
+        self.topic()
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| self.job.routing_key.clone())
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize, Type)]
 pub struct WorkerData {
@@ -85,11 +101,19 @@ impl SubJobDetails {
             ..Default::default()
         }
     }
+
     pub fn topic(topic: String) -> Self {
         SubJobDetails {
             topic: Some(topic),
             ..Default::default()
         }
+    }
+
+    /// Builder method to add topic to existing SubJobDetails.
+    /// Enables chaining: `SubJobDetails::partial(100).with_topic(routing_key)`
+    pub fn with_topic(mut self, topic: String) -> Self {
+        self.topic = Some(topic);
+        self
     }
 }
 
@@ -218,10 +242,15 @@ impl SubJobRepository {
             r#"
             SELECT COUNT(*) as count
             FROM sub_jobs
-            WHERE job_id = $1 AND type = $2 AND status IN ('Created', 'Pending', 'Processing')
+            WHERE job_id = $1
+              AND type = $2
+              AND (status = $3 OR status = $4 OR status = $5)
             "#,
             job_id,
             sub_job_type as SubJobType,
+            SubJobStatus::Created as SubJobStatus,
+            SubJobStatus::Pending as SubJobStatus,
+            SubJobStatus::Processing as SubJobStatus,
         )
         .fetch_one(&self.pool)
         .await?;
@@ -234,26 +263,31 @@ impl SubJobRepository {
             SubJobWithJob,
             r#"
             SELECT
-                sj.id,
-                sj.job_id,
-                sj.status as "status!: SubJobStatus",
-                sj.type as "type!: SubJobType",
-                sj.details,
-                sj.deadline_at,
+                sub_jobs.id,
+                sub_jobs.job_id,
+                sub_jobs.status as "status: SubJobStatus",
+                sub_jobs.type as "type: SubJobType",
+                sub_jobs.details,
+                sub_jobs.deadline_at,
                 JSON_BUILD_OBJECT(
-                    'id', j.id,
-                    'url', j.url,
-                    'routing_key', j.routing_key,
-                    'status', j.status,
-                    'details', j.details
-                ) AS "job!: Json<Job>"
-            FROM sub_jobs sj
-            JOIN jobs j ON sj.job_id = j.id
-            WHERE 
-                sj.status IN ('Created', 'Pending', 'Processing')
-            ORDER BY sj.created_at ASC
+                    'id', jobs.id,
+                    'url', jobs.url,
+                    'routing_key', jobs.routing_key,
+                    'status', jobs.status,
+                    'job_type', jobs.job_type,
+                    'details', jobs.details
+                ) as "job!: Json<Job>"
+            FROM sub_jobs
+            INNER JOIN jobs ON sub_jobs.job_id = jobs.id
+            WHERE sub_jobs.status = $1
+               OR sub_jobs.status = $2
+               OR sub_jobs.status = $3
+            ORDER BY sub_jobs.created_at ASC
             LIMIT 1
             "#,
+            SubJobStatus::Created as SubJobStatus,
+            SubJobStatus::Pending as SubJobStatus,
+            SubJobStatus::Processing as SubJobStatus,
         )
         .fetch_one(&self.pool)
         .await?;
@@ -269,26 +303,27 @@ impl SubJobRepository {
         let sub_job = sqlx::query_as!(
             SubJobWithJob,
             r#"
-            SELECT 
-                sj.id,
-                sj.job_id,
-                sj.status as "status!: SubJobStatus",
-                sj.type as "type!: SubJobType",
-                sj.details,
-                sj.deadline_at,
+            SELECT
+                sub_jobs.id,
+                sub_jobs.job_id,
+                sub_jobs.status as "status: SubJobStatus",
+                sub_jobs.type as "type: SubJobType",
+                sub_jobs.details,
+                sub_jobs.deadline_at,
                 JSON_BUILD_OBJECT(
-                    'id', j.id,
-                    'url', j.url,
-                    'routing_key', j.routing_key,
-                    'status', j.status,
-                    'details', j.details
-                ) AS "job!: Json<Job>"
-            FROM 
-                sub_jobs as sj
-            JOIN 
-                jobs as j ON sj.job_id = j.id
-            WHERE 
-                sj.job_id = $1 AND sj.type = $2
+                    'id', jobs.id,
+                    'url', jobs.url,
+                    'routing_key', jobs.routing_key,
+                    'status', jobs.status,
+                    'job_type', jobs.job_type,
+                    'details', jobs.details
+                ) as "job!: Json<Job>"
+            FROM
+                sub_jobs
+            JOIN
+                jobs ON sub_jobs.job_id = jobs.id
+            WHERE
+                sub_jobs.job_id = $1 AND sub_jobs.type = $2
             "#,
             job_id,
             sub_job_type as SubJobType,
@@ -317,5 +352,42 @@ impl SubJobRepository {
         .await?;
 
         Ok(())
+    }
+
+    pub async fn get_all_pending_benchmarks_for_job(
+        &self,
+        job_id: Uuid,
+    ) -> Result<Vec<SubJobWithJob>, sqlx::Error> {
+        sqlx::query_as!(
+            SubJobWithJob,
+            r#"
+            SELECT
+                sub_jobs.id,
+                sub_jobs.job_id,
+                sub_jobs.status as "status: SubJobStatus",
+                sub_jobs.type as "type: SubJobType",
+                sub_jobs.details,
+                sub_jobs.deadline_at,
+                JSON_BUILD_OBJECT(
+                    'id', jobs.id,
+                    'url', jobs.url,
+                    'routing_key', jobs.routing_key,
+                    'status', jobs.status,
+                    'job_type', jobs.job_type,
+                    'details', jobs.details
+                ) as "job!: Json<Job>"
+            FROM sub_jobs
+            INNER JOIN jobs ON sub_jobs.job_id = jobs.id
+            WHERE sub_jobs.job_id = $1
+              AND sub_jobs.type = $2
+              AND sub_jobs.status = $3
+            ORDER BY sub_jobs.created_at ASC
+            "#,
+            job_id,
+            SubJobType::CombinedDHP as SubJobType,
+            SubJobStatus::Created as SubJobStatus
+        )
+        .fetch_all(&self.pool)
+        .await
     }
 }

@@ -14,9 +14,7 @@ use crate::{
     Repositories,
 };
 
-use super::{
-    sub_job_handler::SubJobHandlerError, sub_job_scaling::get_workers_online_by_subjob_topic,
-};
+use super::sub_job_handler::SubJobHandlerError;
 
 const MAX_DOWNLOAD_DURATION_SECS: i64 = 60;
 const DOWNLOAD_DELAY_SECS: i64 = 10;
@@ -43,10 +41,10 @@ pub(super) async fn process_combined_dhp_type(
     match result {
         Ok(_) => {}
         Err(SubJobHandlerError::Skip(e)) => {
-            debug!("SubJobScalingError::Skip: {}", e);
+            debug!("SubJobCombinedDHPError::Skip: {}", e);
         }
         Err(SubJobHandlerError::FailedJob(e)) => {
-            error!("ubJobScalingError::FailedJob: {}", e);
+            error!("SubJobCombinedDHPError::FailedJob: {}", e);
 
             let _ = repo
                 .sub_job
@@ -67,7 +65,14 @@ async fn process_status_created(
     let start_time = Utc::now() + Duration::seconds(SYNC_DELAY_SECS);
     let download_start_time = start_time + Duration::seconds(DOWNLOAD_DELAY_SECS);
 
-    let workers_online = get_workers_online_by_subjob_topic(repo.clone(), sub_job).await?;
+    // Get workers matching this sub-job's topic.
+    // Uses details.topic if present, falls back to job_routing_key for backward compatibility.
+    let routing_key = sub_job.effective_routing_key();
+    let workers_online = repo
+        .worker
+        .get_workers_online_with_topic(&routing_key)
+        .await
+        .map_err(|e| SubJobHandlerError::Skip(e.to_string()))?;
     let workers_online_total_count = workers_online.len() as i64;
 
     if workers_online_total_count == 0 {
@@ -92,27 +97,25 @@ async fn process_status_created(
         .await
         .map_err(|e| SubJobHandlerError::Skip(e.to_string()))?;
 
-    let job = &sub_job.job;
-
     let job_message = Message::WorkerJob {
-        job_id: job.id,
+        job_id: sub_job.job_id,
         payload: JobMessage {
-            job_id: job.id,
+            job_id: sub_job.job_id,
             sub_job_id: sub_job.id,
-            url: job.url.clone(),
+            url: sub_job.job.url.clone(),
             start_time,
             download_start_time,
-            start_range: job.details.start_range,
-            end_range: job.details.end_range,
+            start_range: sub_job.job.details.start_range,
+            end_range: sub_job.job.details.end_range,
             excluded_workers,
-            log_interval_ms: job.details.log_interval_ms,
+            log_interval_ms: sub_job.job.details.log_interval_ms,
         },
     };
 
     debug!("Publishing job message: {:?}", job_message);
 
     job_queue
-        .publish(&job_message, &job.routing_key)
+        .publish(&job_message, &routing_key)
         .await
         .inspect_err(|e| error!("Failed to publish job message: {}", e))
         .map_err(|_| SubJobHandlerError::Skip("Failed to publish job message".to_string()))?;

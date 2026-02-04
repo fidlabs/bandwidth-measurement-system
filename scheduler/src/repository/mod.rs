@@ -1,4 +1,5 @@
 pub mod data_repository;
+pub mod geolocation_repository;
 pub mod job_repository;
 pub mod service_repository;
 pub mod sub_job_repository;
@@ -8,6 +9,7 @@ pub mod worker_repository;
 use sqlx::PgPool;
 
 pub use self::data_repository::DataRepository;
+pub use self::geolocation_repository::GeolocationRepository;
 pub use self::job_repository::JobRepository;
 pub use self::service_repository::ServiceRepository;
 pub use self::sub_job_repository::SubJobRepository;
@@ -16,6 +18,7 @@ pub use self::worker_repository::WorkerRepository;
 
 pub struct Repositories {
     pub data: DataRepository,
+    pub geolocation: GeolocationRepository,
     pub job: JobRepository,
     pub service: ServiceRepository,
     pub sub_job: SubJobRepository,
@@ -27,6 +30,7 @@ impl Repositories {
     pub fn new(pool: PgPool) -> Self {
         Self {
             data: DataRepository::new(pool.clone()),
+            geolocation: GeolocationRepository::new(pool.clone()),
             job: JobRepository::new(pool.clone()),
             service: ServiceRepository::new(pool.clone()),
             sub_job: SubJobRepository::new(pool.clone()),

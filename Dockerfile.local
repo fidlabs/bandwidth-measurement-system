@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.5
-FROM lukemathwalker/cargo-chef:latest-rust-1.83-slim-bullseye as chef
+FROM lukemathwalker/cargo-chef:latest-rust-1.90-slim-bullseye as chef
 
 WORKDIR /app
 
@@ -25,7 +25,6 @@ RUN cargo install cargo-watch
 # copy cargo files for caching
 COPY Cargo.toml Cargo.lock ./
 COPY scheduler/Cargo.toml ./scheduler/
-COPY url_finder/Cargo.toml ./url_finder/
 COPY worker/Cargo.toml ./worker/
 COPY rabbitmq/Cargo.toml ./rabbitmq/
 

@@ -1,0 +1,78 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) as count\n            FROM sub_jobs\n            WHERE job_id = $1\n              AND type = $2\n              AND (status = $3 OR status = $4 OR status = $5)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "sub_job_type",
+            "kind": {
+              "Enum": [
+                "CombinedDHP",
+                "Scaling"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "sub_job_status",
+            "kind": {
+              "Enum": [
+                "Created",
+                "Pending",
+                "Processing",
+                "Completed",
+                "Failed",
+                "Canceled"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "sub_job_status",
+            "kind": {
+              "Enum": [
+                "Created",
+                "Pending",
+                "Processing",
+                "Completed",
+                "Failed",
+                "Canceled"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "sub_job_status",
+            "kind": {
+              "Enum": [
+                "Created",
+                "Pending",
+                "Processing",
+                "Completed",
+                "Failed",
+                "Canceled"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "cf3d93b5295dddf0dfd8ec641a1719cd4e37aa26244d7634c8738ed15c5ba71f"
+}

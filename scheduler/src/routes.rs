@@ -32,6 +32,10 @@ pub fn create_routes() -> Router<Arc<AppState>> {
     let routes = Router::new()
         .route("/healthcheck", get(healthcheck::handle_healthcheck))
         .route("/jobs", post(jobs::create_job::handle_create_job))
+        .route(
+            "/jobs/geolocation",
+            post(jobs::create_geolocation_job::handle_create_geolocation_job),
+        )
         .route("/jobs", get(jobs::get_jobs::handle_get_jobs))
         .route("/jobs/:job_id", get(jobs::get_job::handle_get_job))
         .route("/jobs/:job_id", delete(jobs::cancel_job::handle_cancel_job));

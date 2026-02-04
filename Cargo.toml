@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
-members = [ 
-    "common", 
+members = [
+    "common",
     "rabbitmq",
-    "scheduler", 
+    "scheduler",
     "worker",
 ]
 

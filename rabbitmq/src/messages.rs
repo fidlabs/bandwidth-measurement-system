@@ -23,6 +23,45 @@ pub struct JobMessage {
     pub log_interval_ms: i64,
 }
 
+/// Parameters for constructing a JobMessage that come from job configuration.
+/// These are typically extracted from SubJobWithJob and its nested Job/JobDetails.
+pub struct JobParams<'a> {
+    pub job_id: Uuid,
+    pub sub_job_id: Uuid,
+    pub url: &'a str,
+    pub start_range: i64,
+    pub end_range: i64,
+    pub log_interval_ms: i64,
+}
+
+impl JobMessage {
+    /// Creates a new JobMessage from job parameters and runtime scheduling data.
+    ///
+    /// # Arguments
+    /// * `params` - Static job configuration extracted from the database
+    /// * `start_time` - Scheduled start time for synchronization
+    /// * `download_start_time` - When downloads should begin
+    /// * `excluded_workers` - Workers to exclude from this sub-job
+    pub fn new(
+        params: JobParams<'_>,
+        start_time: DateTime<Utc>,
+        download_start_time: DateTime<Utc>,
+        excluded_workers: Vec<String>,
+    ) -> Self {
+        Self {
+            job_id: params.job_id,
+            sub_job_id: params.sub_job_id,
+            url: params.url.to_string(),
+            start_time,
+            download_start_time,
+            start_range: params.start_range,
+            end_range: params.end_range,
+            excluded_workers,
+            log_interval_ms: params.log_interval_ms,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ResultMessage {
     pub run_id: Uuid,

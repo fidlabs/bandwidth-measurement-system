@@ -5,19 +5,17 @@ use axum::{
 use axum_extra::extract::WithRejection;
 use color_eyre::Result;
 use common::api_response::*;
-use rand::Rng;
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{debug, info};
-use url::Url;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    job_repository::{Job, JobDetails, JobStatus},
+    job_repository::{Job, JobDetails, JobStatus, JobType},
     state::AppState,
     sub_job_repository::{SubJob, SubJobDetails, SubJobStatus, SubJobType},
+    url_validator::validate_and_get_file_range,
 };
 
 #[derive(Deserialize, ToSchema, Debug)]
@@ -47,7 +45,7 @@ pub struct CreateJobResponse {
 
 #[derive(Debug)]
 struct CreateJobParams {
-    pub url: Url,
+    pub url: String,
     pub routing_key: String,
     pub worker_count: i64,
     pub entity: Option<String>,
@@ -60,17 +58,12 @@ impl TryFrom<CreateJobInput> for CreateJobParams {
     type Error = ApiResponse<()>;
 
     fn try_from(input: CreateJobInput) -> Result<Self, Self::Error> {
-        let url = Url::parse(&input.url).map_err(|_| bad_request("Invalid URL provided"))?;
-        if url.scheme() != "http" && url.scheme() != "https" {
-            return Err(bad_request("URL scheme must be http or https"));
-        }
-
         if input.routing_key.is_empty() {
             return Err(bad_request("Routing key cannot be empty"));
         }
 
         Ok(CreateJobParams {
-            url,
+            url: input.url,
             routing_key: input.routing_key,
             worker_count: input.worker_count.unwrap_or(10).clamp(1, 40),
             entity: input.entity,
@@ -117,9 +110,11 @@ pub async fn handle_create_job(
     let params: CreateJobParams = payload.try_into()?;
     let target_worker_count = params.worker_count;
 
-    // Create the job
-    let (start_range, end_range) =
-        get_file_range_for_file(params.url.as_ref(), &params.size_mb).await?;
+    // Validate URL and get file range (with SSRF protection)
+    let (validated_url, start_range, end_range) =
+        validate_and_get_file_range(&state.acl_client, &params.url, params.size_mb)
+            .await
+            .map_err(|e| bad_request(e.to_string()))?;
 
     let job_id = Uuid::new_v4();
 
@@ -128,9 +123,10 @@ pub async fn handle_create_job(
         .job
         .create_job(
             job_id,
-            params.url.to_string(),
+            validated_url.as_str().to_string(),
             &params.routing_key,
             JobStatus::Pending,
+            JobType::BandwidthSaturation,
             JobDetails::new(
                 start_range,
                 end_range,
@@ -142,7 +138,10 @@ pub async fn handle_create_job(
             ),
         )
         .await
-        .map_err(|_| internal_server_error("Failed to create job"))?;
+        .map_err(|e| {
+            tracing::error!("Failed to create job: {:?}", e);
+            internal_server_error("Failed to create job")
+        })?;
 
     debug!("Job created successfully: {:?}", job);
 
@@ -173,63 +172,28 @@ pub async fn handle_create_job(
     Ok(ok_response(CreateJobResponse { job, sub_jobs }))
 }
 
-/// Get a random range of 100MB from the file using HEAD request
-async fn get_file_range_for_file(url: &str, size_mb: &i64) -> Result<(i64, i64), ApiResponse<()>> {
-    let response = Client::new()
-        .head(url)
-        .send()
-        .await
-        .map_err(|e| bad_request(format!("Failed to execute HEAD request {e}")))?;
-
-    debug!("Response: {:?}", response);
-
-    // For some freak reason response.content_length() is returning 0
-    let content_length = response
-        .headers()
-        .get(reqwest::header::CONTENT_LENGTH)
-        .ok_or_else(|| bad_request("Content-Length header is missing in the response"))?
-        .to_str()
-        .map_err(|e| bad_request(format!("Failed to parse Content-Length header: {e}")))?
-        .parse::<i64>()
-        .map_err(|e| bad_request(format!("Failed to parse Content-Length header: {e}")))?;
-
-    debug!("Content-Length: {:?}", content_length);
-
-    let size = size_mb * 1024 * 1024;
-
-    if content_length < size {
-        return Err(bad_request(format!("File size is less than {size_mb} MB")));
-    }
-
-    let mut rng = rand::thread_rng();
-    let start_range = rng.gen_range(0..content_length - size);
-    let end_range = start_range + size;
-
-    debug!("Selected range: {} - {}", start_range, end_range);
-
-    Ok((start_range, end_range))
-}
-
 /// Dynamically create working sub jobs based on the worker count
 async fn create_working_sub_jobs(
     state: &Arc<AppState>,
     job: &Job,
     worker_count: i64,
 ) -> Result<Vec<SubJob>, ApiResponse<()>> {
-    let mut sub_job_details: Vec<SubJobDetails> = Vec::new();
+    let routing_key = job.routing_key.clone();
 
-    match worker_count {
-        1 => sub_job_details.push(SubJobDetails::partial(100)),
-        2 => {
-            sub_job_details.push(SubJobDetails::partial(50));
-            sub_job_details.push(SubJobDetails::partial(100));
-        }
-        _ => {
-            sub_job_details.push(SubJobDetails::partial(1));
-            sub_job_details.push(SubJobDetails::partial(80));
-            sub_job_details.push(SubJobDetails::partial(100));
-        }
-    }
+    // Each CombinedDHP sub-job includes the topic for consistent routing.
+    // This allows the publish logic to use sub_job.effective_routing_key() uniformly.
+    let sub_job_details: Vec<SubJobDetails> = match worker_count {
+        1 => vec![SubJobDetails::partial(100).with_topic(routing_key.clone())],
+        2 => vec![
+            SubJobDetails::partial(50).with_topic(routing_key.clone()),
+            SubJobDetails::partial(100).with_topic(routing_key.clone()),
+        ],
+        _ => vec![
+            SubJobDetails::partial(1).with_topic(routing_key.clone()),
+            SubJobDetails::partial(80).with_topic(routing_key.clone()),
+            SubJobDetails::partial(100).with_topic(routing_key.clone()),
+        ],
+    };
 
     let mut sub_jobs = Vec::new();
     for details in sub_job_details {

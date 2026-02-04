@@ -13,7 +13,10 @@ use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
-    job_repository::JobWithSubJobsWithData, state::AppState, sub_job_repository::SubJobType,
+    job_repository::{JobType, JobWithSubJobsWithData},
+    repository::geolocation_repository::{GeolocationRepository, LocationResult},
+    state::AppState,
+    sub_job_repository::SubJobType,
 };
 
 #[derive(Deserialize, ToSchema, IntoParams)]
@@ -23,7 +26,7 @@ pub struct GetJobPathParams {
 
 #[derive(Serialize, Deserialize, ToSchema, IntoParams)]
 pub struct GetJobQueryParams {
-    #[schema(example = "false")]
+    #[schema(default = false, example = "false")]
     pub extended: Option<bool>,
 }
 
@@ -32,6 +35,10 @@ pub struct GetJobResponse {
     summary: JobSummary,
     #[serde(flatten)]
     job: JobWithSubJobsWithData,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    closest_location: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    location_results: Option<Vec<LocationResult>>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -63,6 +70,7 @@ pub struct JobSummary {
     responses(
         (status = 200, description = "Job Data", body = GetJobResponse),
         (status = 400, description = "Bad Request", body = ErrorResponse),
+        (status = 404, description = "Job Not Found", body = ErrorResponse),
         (status = 500, description = "Internal Server Error", body = ErrorResponse),
     ),
     tags = ["Jobs"],
@@ -92,6 +100,24 @@ pub async fn handle_get_job(
         })?;
 
     debug!("Job data found for job_id: {} {:?}", job_id, job);
+
+    // Check if this is a geolocation job
+    let (closest_location, location_results) = if job.job_type == JobType::Geolocation {
+        let results = state
+            .repo
+            .geolocation
+            .get_location_results(job_id)
+            .await
+            .map_err(|e| {
+                error!("Failed to get location results: {:?}", e);
+                internal_server_error("Failed to get location results")
+            })?;
+
+        let closest = GeolocationRepository::calculate_closest_location(&results);
+        (closest, Some(results))
+    } else {
+        (None, None)
+    };
 
     let download_speeds_iter = job
         .sub_jobs
@@ -145,5 +171,7 @@ pub async fn handle_get_job(
             average_end_latency: None,
             average_gateway_latency: None,
         },
+        closest_location,
+        location_results,
     }))
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE services\n            SET descale_at = NULL\n            WHERE id = $1\n            RETURNING id, name, provider_type as \"provider_type!: ProviderType\", details, is_enabled, descale_at\n            ",
+  "query": "\n            INSERT INTO services (name, provider_type, details, is_enabled)\n            VALUES ($1, $2, $3, $4)\n            RETURNING id, name, provider_type as \"provider_type!: ProviderType\", details, is_enabled, location, descale_at\n            ",
   "describe": {
     "columns": [
       {
@@ -40,13 +40,31 @@
       },
       {
         "ordinal": 5,
+        "name": "location",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
         "name": "descale_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Varchar",
+        {
+          "Custom": {
+            "name": "provider_type",
+            "kind": {
+              "Enum": [
+                "docker_local",
+                "aws_fargate"
+              ]
+            }
+          }
+        },
+        "Jsonb",
+        "Bool"
       ]
     },
     "nullable": [
@@ -55,8 +73,9 @@
       false,
       false,
       false,
+      true,
       true
     ]
   },
-  "hash": "cf75c6bb621e0a6e1051e1f68a19a23831df12de48458c02b132aaff92fcfe7a"
+  "hash": "b1bf0fc62ebce0d88005ffe8e10f936a1dafd0446913ec15b43b466fc48d9891"
 }

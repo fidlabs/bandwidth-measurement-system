@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO workers (worker_name, status, last_seen, job_id, started_at, shutdown_at, service_id)\n            VALUES ($1, $2, $3, $4, $5, $6, $7)\n            ON CONFLICT (worker_name)\n            DO UPDATE SET\n                status = EXCLUDED.status,\n                last_seen = EXCLUDED.last_seen,\n                job_id = EXCLUDED.job_id,\n                service_id = COALESCE(EXCLUDED.service_id, workers.service_id),\n                started_at = CASE\n                    WHEN EXCLUDED.status = 'online' THEN EXCLUDED.last_seen\n                    ELSE workers.started_at\n                END,\n                shutdown_at = CASE\n                    WHEN EXCLUDED.status = 'offline' THEN EXCLUDED.last_seen\n                    ELSE workers.shutdown_at\n                END\n            WHERE workers.last_seen < EXCLUDED.last_seen\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Timestamptz",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "261e8f5c36d9f50bd7f24f8f7ce9f953bf7da033480e815c7feb1996737d02e2"
+}

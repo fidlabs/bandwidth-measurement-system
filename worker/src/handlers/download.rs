@@ -179,3 +179,89 @@ pub async fn process(job_id: Uuid, payload: JobMessage) -> Result<DownloadResult
         second_by_second_logs,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_next_interval_already_aligned() {
+        // Time already at an interval boundary (Jan 1, 2023 00:00:00 UTC)
+        let current = DateTime::<Utc>::from_timestamp_millis(1672531200000).unwrap();
+        let interval = 1000; // 1 second
+        let result = calculate_next_interval(current, interval);
+
+        // Should go to the next interval boundary (1 second later)
+        let expected = current + Duration::milliseconds(1000);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_calculate_next_interval_not_aligned() {
+        // Time not at an interval boundary (Jan 1, 2023 00:00:00.5 UTC)
+        let current = DateTime::<Utc>::from_timestamp_millis(1672531200500).unwrap();
+        let interval = 1000; // 1 second
+        let result = calculate_next_interval(current, interval);
+
+        // Should be at the next interval boundary (500ms later)
+        let expected = current + Duration::milliseconds(500);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_calculate_next_interval_custom_interval() {
+        // Test with a custom interval (Jan 1, 2023 00:00:00.1 UTC)
+        let current = DateTime::<Utc>::from_timestamp_millis(1672531200100).unwrap();
+        let interval = 250; // 250ms
+        let result = calculate_next_interval(current, interval);
+
+        // Should be at the next interval boundary (150ms later)
+        let expected = current + Duration::milliseconds(150);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_calculate_next_interval_large_interval() {
+        // Test with a large interval (Jan 1, 2023 00:30:00 UTC)
+        let current = DateTime::<Utc>::from_timestamp_millis(1672533000000).unwrap();
+        let interval = 3_600_000; // 1 hour in milliseconds
+        let result = calculate_next_interval(current, interval);
+
+        // Should be at the next hour (Jan 1, 2023 01:00:00 UTC)
+        let expected = DateTime::<Utc>::from_timestamp_millis(1672534800000).unwrap();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_calculate_next_interval_100ms_granularity() {
+        // Base time: Jan 1, 2023 00:00:00.000 UTC
+        let base_time = DateTime::<Utc>::from_timestamp_millis(1672531200000).unwrap();
+        let interval = 100; // 100ms interval
+
+        // Test with different offsets within the 100ms interval
+
+        // Case 1: At 0ms offset (aligned)
+        let current = base_time;
+        let result = calculate_next_interval(current, interval);
+        let expected = current + Duration::milliseconds(100);
+        assert_eq!(result, expected, "Failed with 0ms offset");
+
+        // Case 2: At 10ms offset
+        let current = base_time + Duration::milliseconds(10);
+        let result = calculate_next_interval(current, interval);
+        let expected = current + Duration::milliseconds(90);
+        assert_eq!(result, expected, "Failed with 10ms offset");
+
+        // Case 3: At 50ms offset (middle of interval)
+        let current = base_time + Duration::milliseconds(50);
+        let result = calculate_next_interval(current, interval);
+        let expected = current + Duration::milliseconds(50);
+        assert_eq!(result, expected, "Failed with 50ms offset");
+
+        // Case 4: At 99ms offset (just before next interval)
+        let current = base_time + Duration::milliseconds(99);
+        let result = calculate_next_interval(current, interval);
+        let expected = current + Duration::milliseconds(1);
+        assert_eq!(result, expected, "Failed with 99ms offset");
+    }
+}

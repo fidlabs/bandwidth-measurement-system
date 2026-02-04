@@ -8,7 +8,7 @@ use tracing::{debug, error, info};
 use crate::{
     service_repository::Service,
     service_scaler::ServiceScalerRegistry,
-    sub_job_repository::{SubJobStatus, SubJobType, SubJobWithJob},
+    sub_job_repository::{SubJobStatus, SubJobWithJob},
     Repositories,
 };
 
@@ -39,7 +39,7 @@ pub(super) async fn process_scaling(
             info!("SubJobScalingError::Skip: {}", e);
         }
         Err(SubJobHandlerError::FailedJob(e)) => {
-            error!("ubJobScalingError::FailedJob: {}", e);
+            error!("SubJobScalingError::FailedJob: {}", e);
 
             let _ = repo
                 .sub_job
@@ -235,28 +235,4 @@ pub async fn get_services_and_workers(
     );
 
     Ok((services, workers_online, workers_count, scale_each_by))
-}
-
-async fn get_topic_from_scaling_subjob(
-    repo: Arc<Repositories>,
-    sub_job: &SubJobWithJob,
-) -> Result<String, SubJobHandlerError> {
-    let scaling_sub_job = repo
-        .sub_job
-        .get_sub_job_by_id_and_type(&sub_job.job_id, SubJobType::Scaling)
-        .await
-        .map_err(|e| SubJobHandlerError::Skip(e.to_string()))?;
-    let topic = get_topic(&scaling_sub_job)?;
-
-    Ok(topic)
-}
-
-pub(super) async fn get_workers_online_by_subjob_topic(
-    repo: Arc<Repositories>,
-    sub_job: &SubJobWithJob,
-) -> Result<Vec<String>, SubJobHandlerError> {
-    let topic = get_topic_from_scaling_subjob(repo.clone(), sub_job).await?;
-    let workers_online = get_workers_online(repo.clone(), &topic).await?;
-
-    Ok(workers_online)
 }

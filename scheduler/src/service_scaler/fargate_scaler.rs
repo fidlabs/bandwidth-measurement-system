@@ -8,6 +8,7 @@ use crate::service_repository::Service;
 
 use super::{ServiceScaler, ServiceScalerError, ServiceScalerInfo};
 
+#[derive(Default)]
 pub struct FargateScaler {}
 
 #[async_trait]

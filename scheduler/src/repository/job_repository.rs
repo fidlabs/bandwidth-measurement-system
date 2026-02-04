@@ -22,6 +22,17 @@ pub enum JobStatus {
     Canceled,
 }
 
+#[derive(Debug, Type, Serialize, Deserialize, ToSchema, Clone, PartialEq)]
+#[sqlx(type_name = "job_type")]
+pub enum JobType {
+    #[serde(rename = "bandwidth_saturation")]
+    #[sqlx(rename = "bandwidth_saturation")]
+    BandwidthSaturation,
+    #[serde(rename = "geolocation")]
+    #[sqlx(rename = "geolocation")]
+    Geolocation,
+}
+
 #[derive(Clone)]
 pub struct JobRepository {
     pool: PgPool,
@@ -43,6 +54,7 @@ pub struct JobWithSubJobsWithData {
     pub url: String,
     pub routing_key: String,
     pub status: JobStatus,
+    pub job_type: JobType,
     pub details: JobDetails,
     #[schema(value_type = Vec<SubJobWithData>)]
     pub sub_jobs: Json<Vec<SubJobWithData>>,
@@ -137,6 +149,7 @@ pub struct Job {
     pub url: String,
     pub routing_key: String,
     pub status: JobStatus,
+    pub job_type: JobType,
     pub details: JobDetails,
 }
 
@@ -162,19 +175,21 @@ impl JobRepository {
         url: String,
         routing_key: &String,
         status: JobStatus,
+        job_type: JobType,
         details: JobDetails,
     ) -> Result<Job, sqlx::Error> {
         let job = sqlx::query_as!(
             Job,
             r#"
-            INSERT INTO jobs (id, url, routing_key, status, details)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING id, url, routing_key, status as "status!: JobStatus", details as "details!: serde_json::Value"
+            INSERT INTO jobs (id, url, routing_key, status, job_type, details)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id, url, routing_key, status as "status!: JobStatus", job_type as "job_type!: JobType", details as "details!: serde_json::Value"
             "#,
             job_id,
             url,
             routing_key,
             status as JobStatus,
+            job_type as JobType,
             serde_json::to_value(details).unwrap(),
         )
         .fetch_one(&self.pool)
@@ -188,7 +203,7 @@ impl JobRepository {
         let job = sqlx::query_as!(
             Job,
             r#"
-            SELECT id, url, routing_key, status as "status!: JobStatus", details as "details!: serde_json::Value"
+            SELECT id, url, routing_key, status as "status!: JobStatus", job_type as "job_type!: JobType", details as "details!: serde_json::Value"
             FROM jobs
             WHERE id = $1
             "#,
@@ -252,6 +267,7 @@ impl JobRepository {
                 j.url,
                 j.routing_key,
                 j.status AS "status!: JobStatus",
+                j.job_type AS "job_type!: JobType",
                 j.details AS "details!: serde_json::Value",
                 COALESCE(sub_jobs_agg.sub_jobs, '[]'::json) AS "sub_jobs!: Json<Vec<SubJobWithData>>"
             FROM jobs j

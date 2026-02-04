@@ -22,6 +22,7 @@ pub struct Service {
     pub provider_type: ProviderType,
     pub details: serde_json::Value,
     pub is_enabled: bool,
+    pub location: Option<String>,
     pub descale_at: Option<DateTime<Utc>>,
 }
 
@@ -32,6 +33,7 @@ pub struct ServiceWithTopics {
     pub provider_type: ProviderType,
     pub details: serde_json::Value,
     pub is_enabled: bool,
+    pub location: Option<String>,
     pub descale_at: Option<DateTime<Utc>>,
     pub topics: Vec<String>,
 }
@@ -44,6 +46,7 @@ impl ServiceWithTopics {
             provider_type: self.provider_type.clone(),
             details: self.details.clone(),
             is_enabled: self.is_enabled,
+            location: self.location.clone(),
             descale_at: self.descale_at,
         }
     }
@@ -62,7 +65,7 @@ impl ServiceRepository {
         let services = sqlx::query_as!(
             Service,
             r#"
-            SELECT id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, descale_at
+            SELECT id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, location, descale_at
             FROM services
             "#
         )
@@ -76,13 +79,14 @@ impl ServiceRepository {
         let services = sqlx::query_as!(
             ServiceWithTopics,
             r#"
-            SELECT 
-                s.id, 
-                s.name, 
-                s.provider_type as "provider_type!: ProviderType", 
-                s.details, 
-                s.is_enabled, 
-                s.descale_at, 
+            SELECT
+                s.id,
+                s.name,
+                s.provider_type as "provider_type!: ProviderType",
+                s.details,
+                s.is_enabled,
+                s.location,
+                s.descale_at,
                 COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as "topics!: Vec<String>"
             FROM services as s
             LEFT JOIN service_topics as st ON s.id = st.service_id
@@ -107,7 +111,7 @@ impl ServiceRepository {
             r#"
             INSERT INTO services (name, provider_type, details, is_enabled)
             VALUES ($1, $2, $3, $4)
-            RETURNING id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, descale_at
+            RETURNING id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, location, descale_at
             "#,
             name,
             provider_type as ProviderType,
@@ -124,11 +128,27 @@ impl ServiceRepository {
         let service = sqlx::query_as!(
             Service,
             r#"
-            SELECT id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, descale_at
+            SELECT id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, location, descale_at
             FROM services
             WHERE id = $1
             "#,
             service_id
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(service)
+    }
+
+    pub async fn get_service_by_name(&self, name: &str) -> Result<Service, sqlx::Error> {
+        let service = sqlx::query_as!(
+            Service,
+            r#"
+            SELECT id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, location, descale_at
+            FROM services
+            WHERE name = $1
+            "#,
+            name
         )
         .fetch_one(&self.pool)
         .await?;
@@ -142,7 +162,7 @@ impl ServiceRepository {
             r#"
             DELETE FROM services
             WHERE id = $1
-            RETURNING id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, descale_at
+            RETURNING id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, location, descale_at
             "#,
             service_id
         )
@@ -159,7 +179,7 @@ impl ServiceRepository {
         let services = sqlx::query_as!(
             Service,
             r#"
-            SELECT id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, descale_at
+            SELECT id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, location, descale_at
             FROM services as s
             JOIN service_topics as st ON s.id = st.service_id
             WHERE st.topic_id = (
@@ -200,7 +220,7 @@ impl ServiceRepository {
         let services = sqlx::query_as!(
             Service,
             r#"
-            SELECT id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, descale_at
+            SELECT id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, location, descale_at
             FROM services
             WHERE descale_at <= NOW()
             "#,
@@ -218,7 +238,7 @@ impl ServiceRepository {
             UPDATE services
             SET descale_at = NULL
             WHERE id = $1
-            RETURNING id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, descale_at
+            RETURNING id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, location, descale_at
             "#,
             service_id,
         )
@@ -239,7 +259,7 @@ impl ServiceRepository {
             UPDATE services
             SET is_enabled = $2
             WHERE id = $1
-            RETURNING id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, descale_at
+            RETURNING id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, location, descale_at
             "#,
             service_id,
             is_enabled
@@ -248,5 +268,20 @@ impl ServiceRepository {
         .await?;
 
         Ok(service)
+    }
+
+    pub async fn get_distinct_locations(&self) -> Result<Vec<String>, sqlx::Error> {
+        let records = sqlx::query!(
+            r#"
+            SELECT DISTINCT location
+            FROM services
+            WHERE is_enabled = true AND location IS NOT NULL
+            ORDER BY location
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(records.into_iter().filter_map(|r| r.location).collect())
     }
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT \n                sj.id,\n                sj.job_id,\n                sj.status as \"status!: SubJobStatus\",\n                sj.type as \"type!: SubJobType\",\n                sj.details,\n                sj.deadline_at,\n                JSON_BUILD_OBJECT(\n                    'id', j.id,\n                    'url', j.url,\n                    'routing_key', j.routing_key,\n                    'status', j.status,\n                    'details', j.details\n                ) AS \"job!: Json<Job>\"\n            FROM \n                sub_jobs as sj\n            JOIN \n                jobs as j ON sj.job_id = j.id\n            WHERE \n                sj.job_id = $1 AND sj.type = $2\n            ",
+  "query": "\n            SELECT\n                sub_jobs.id,\n                sub_jobs.job_id,\n                sub_jobs.status as \"status: SubJobStatus\",\n                sub_jobs.type as \"type: SubJobType\",\n                sub_jobs.details,\n                sub_jobs.deadline_at,\n                JSON_BUILD_OBJECT(\n                    'id', jobs.id,\n                    'url', jobs.url,\n                    'routing_key', jobs.routing_key,\n                    'status', jobs.status,\n                    'job_type', jobs.job_type,\n                    'details', jobs.details\n                ) as \"job!: Json<Job>\"\n            FROM\n                sub_jobs\n            JOIN\n                jobs ON sub_jobs.job_id = jobs.id\n            WHERE\n                sub_jobs.job_id = $1 AND sub_jobs.type = $2\n            ",
   "describe": {
     "columns": [
       {
@@ -15,7 +15,7 @@
       },
       {
         "ordinal": 2,
-        "name": "status!: SubJobStatus",
+        "name": "status: SubJobStatus",
         "type_info": {
           "Custom": {
             "name": "sub_job_status",
@@ -34,7 +34,7 @@
       },
       {
         "ordinal": 3,
-        "name": "type!: SubJobType",
+        "name": "type: SubJobType",
         "type_info": {
           "Custom": {
             "name": "sub_job_type",
@@ -89,5 +89,5 @@
       null
     ]
   },
-  "hash": "73b7986a8f98b80e3581374a6b8207d043e899bd2cff4f43b3dd07f8df18613f"
+  "hash": "28b7477d4ed6a17e36d7fdd42f3c4b903907cb2423308bce919992a455332992"
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, name, provider_type as \"provider_type!: ProviderType\", details, is_enabled, descale_at\n            FROM services\n            ",
+  "query": "\n            SELECT id, name, provider_type as \"provider_type!: ProviderType\", details, is_enabled, location, descale_at\n            FROM services\n            ",
   "describe": {
     "columns": [
       {
@@ -40,6 +40,11 @@
       },
       {
         "ordinal": 5,
+        "name": "location",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
         "name": "descale_at",
         "type_info": "Timestamptz"
       }
@@ -53,8 +58,9 @@
       false,
       false,
       false,
+      true,
       true
     ]
   },
-  "hash": "610c68ec22d8c2dbb382cdcebb6d9d2370d2fda6e4338f80a4d00301a2a2fcac"
+  "hash": "65a0c6f537bbab7c8d83be65a2a9c31d11f301f0903cfef6d6c4d02221d87720"
 }

@@ -1,19 +1,9 @@
 use std::{error::Error, sync::Arc};
 
-use api::api_doc::ApiDoc;
 use axum::Router;
-use background::{
-    service_descaler::service_descaler_handler, sub_job_handler::sub_job_handler,
-    worker_online_check::process_worker_online_check,
-};
 use color_eyre::Result;
-use config::CONFIG;
-use queue::{data_consumer::DataConsumer, status_consumer::StatusConsumer};
 use rabbitmq::*;
-use repository::*;
-use service_scaler::ServiceScalerRegistry;
 use sqlx::{migrate::Migrator, PgPool};
-use state::AppState;
 use tokio::{
     net::TcpListener,
     signal::unix::{signal, SignalKind},
@@ -25,15 +15,20 @@ use tracing_subscriber::EnvFilter;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-mod api;
-mod background;
-mod config;
-mod queue;
-mod repository;
-mod routes;
-mod service_scaler;
-mod state;
-mod types;
+// Import from library crate
+use scheduler::{
+    background::{
+        service_descaler::service_descaler_handler, sub_job_handler::sub_job_handler,
+        worker_online_check::process_worker_online_check,
+    },
+    config::CONFIG,
+    repository::Repositories,
+    routes,
+    service_scaler::ServiceScalerRegistry,
+    state::AppState,
+    url_validator::create_acl_client,
+    ApiDoc, DataConsumer, StatusConsumer,
+};
 
 static MIGRATOR: Migrator = sqlx::migrate!("./src/migrations");
 
@@ -78,8 +73,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Initialize service scaler registry
     let service_scaler_registry = Arc::new(ServiceScalerRegistry::new());
 
+    // Initialize ACL client for SSRF-safe URL validation
+    let acl_client = create_acl_client();
+
     // Initialize app state
-    let app_state = Arc::new(AppState::new(repo.clone(), service_scaler_registry.clone()));
+    let app_state = Arc::new(AppState::new(
+        repo.clone(),
+        service_scaler_registry.clone(),
+        acl_client,
+    ));
 
     // Backgroud processes
     tokio::spawn(sub_job_handler(

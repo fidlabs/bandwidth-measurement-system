@@ -1,0 +1,51 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id,\n                details->>'topic' as location,\n                status::text as status,\n                details->>'error' as error\n            FROM sub_jobs\n            WHERE job_id = $1 AND type = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "location",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "error",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "sub_job_type",
+            "kind": {
+              "Enum": [
+                "CombinedDHP",
+                "Scaling"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "eb7c778ca9495a43695e3323d7e17f8ff356ed52328842597339a1bc93915d0f"
+}

@@ -19,16 +19,18 @@ impl WorkerRepository {
         worker_name: &String,
         status: &WorkerStatus,
         timestamp: DateTime<Utc>,
+        service_id: Option<Uuid>,
     ) -> Result<(), sqlx::Error> {
         sqlx::query!(
             r#"
-            INSERT INTO workers (worker_name, status, last_seen, job_id, started_at, shutdown_at)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO workers (worker_name, status, last_seen, job_id, started_at, shutdown_at, service_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (worker_name)
             DO UPDATE SET
                 status = EXCLUDED.status,
                 last_seen = EXCLUDED.last_seen,
                 job_id = EXCLUDED.job_id,
+                service_id = COALESCE(EXCLUDED.service_id, workers.service_id),
                 started_at = CASE
                     WHEN EXCLUDED.status = 'online' THEN EXCLUDED.last_seen
                     ELSE workers.started_at
@@ -44,7 +46,8 @@ impl WorkerRepository {
             timestamp,
             None::<Uuid>,
             None::<DateTime<Utc>>,
-            None::<DateTime<Utc>>
+            None::<DateTime<Utc>>,
+            service_id,
         )
         .execute(&self.pool)
         .await?;
@@ -146,5 +149,14 @@ impl WorkerRepository {
         .await?;
 
         Ok(())
+    }
+
+    /// Parse service name from worker_name
+    /// Example: "bms-worker_eu_pl-1" -> "worker_eu_pl"
+    pub fn parse_service_name(worker_name: &str) -> Option<String> {
+        worker_name
+            .strip_prefix("bms-")
+            .and_then(|s| s.rsplit_once('-'))
+            .map(|(service, _)| service.to_string())
     }
 }

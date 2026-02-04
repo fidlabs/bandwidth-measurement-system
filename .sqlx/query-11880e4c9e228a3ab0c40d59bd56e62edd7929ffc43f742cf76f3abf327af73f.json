@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO jobs (id, url, routing_key, status, details)\n            VALUES ($1, $2, $3, $4, $5)\n            RETURNING id, url, routing_key, status as \"status!: JobStatus\", details as \"details!: serde_json::Value\"\n            ",
+  "query": "\n            INSERT INTO jobs (id, url, routing_key, status, job_type, details)\n            VALUES ($1, $2, $3, $4, $5, $6)\n            RETURNING id, url, routing_key, status as \"status!: JobStatus\", job_type as \"job_type!: JobType\", details as \"details!: serde_json::Value\"\n            ",
   "describe": {
     "columns": [
       {
@@ -39,6 +39,21 @@
       },
       {
         "ordinal": 4,
+        "name": "job_type!: JobType",
+        "type_info": {
+          "Custom": {
+            "name": "job_type",
+            "kind": {
+              "Enum": [
+                "bandwidth_saturation",
+                "geolocation"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
         "name": "details!: serde_json::Value",
         "type_info": "Jsonb"
       }
@@ -63,6 +78,17 @@
             }
           }
         },
+        {
+          "Custom": {
+            "name": "job_type",
+            "kind": {
+              "Enum": [
+                "bandwidth_saturation",
+                "geolocation"
+              ]
+            }
+          }
+        },
         "Jsonb"
       ]
     },
@@ -71,8 +97,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "e5bb58d2f98a6a27de8df353e6d87eaea3af9b7429b41dc4947d2a7535727682"
+  "hash": "11880e4c9e228a3ab0c40d59bd56e62edd7929ffc43f742cf76f3abf327af73f"
 }

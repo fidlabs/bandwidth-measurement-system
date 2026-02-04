@@ -35,4 +35,14 @@ impl Config {
             local_mode: env::var("LOCAL_MODE").unwrap_or("false".to_string()),
         })
     }
+
+    /// Create config with explicit values (for testing)
+    pub fn new_for_test(db_url: String) -> Self {
+        Self {
+            db_url,
+            log_level: "debug".to_string(),
+            auth_token: "test-token".to_string(),
+            local_mode: "true".to_string(),
+        }
+    }
 }

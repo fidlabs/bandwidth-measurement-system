@@ -1,3 +1,10 @@
 /target
 z_notes
 **/.env
+certs
+constants
+docs
+frontend
+local
+static
+.mcp.json
