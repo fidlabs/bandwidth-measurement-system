@@ -1,0 +1,57 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE sub_jobs\n            SET\n                status = $1,\n                details = jsonb_set(details, '{error}', $5, true)\n            WHERE job_id = $2\n              AND type = $3\n              AND status = $4\n              AND details->>'topic' = $6\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "sub_job_status",
+            "kind": {
+              "Enum": [
+                "Created",
+                "Pending",
+                "Processing",
+                "Completed",
+                "Failed",
+                "Canceled"
+              ]
+            }
+          }
+        },
+        "Uuid",
+        {
+          "Custom": {
+            "name": "sub_job_type",
+            "kind": {
+              "Enum": [
+                "CombinedDHP",
+                "Scaling"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "sub_job_status",
+            "kind": {
+              "Enum": [
+                "Created",
+                "Pending",
+                "Processing",
+                "Completed",
+                "Failed",
+                "Canceled"
+              ]
+            }
+          }
+        },
+        "Jsonb",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f4b32b653d56d0d169bbe96230deb9cfb494a9e131de28890a0a7b38eb385dd5"
+}

@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use color_eyre::Result;
 use tokio::time::Duration;
 use tracing::{debug, error, info};
 
@@ -21,7 +20,7 @@ pub(super) async fn process_scaling(
     repo: Arc<Repositories>,
     service_scaler_registry: Arc<ServiceScalerRegistry>,
     sub_job: SubJobWithJob,
-) -> Result<()> {
+) -> Result<(), SubJobHandlerError> {
     let result = match sub_job.status {
         SubJobStatus::Created => {
             process_scaling_created(repo.clone(), service_scaler_registry, &sub_job).await
@@ -33,7 +32,7 @@ pub(super) async fn process_scaling(
         )),
     };
 
-    match result {
+    match &result {
         Ok(_) => {}
         Err(SubJobHandlerError::Skip(e)) => {
             info!("SubJobScalingError::Skip: {}", e);
@@ -43,12 +42,16 @@ pub(super) async fn process_scaling(
 
             let _ = repo
                 .sub_job
-                .update_sub_job_status_with_error(&sub_job.id, SubJobStatus::Failed, e)
+                .update_sub_job_status_with_error(
+                    &sub_job.id,
+                    SubJobStatus::Failed,
+                    e.clone(),
+                )
                 .await;
         }
     }
 
-    Ok(())
+    result
 }
 
 #[tracing::instrument(skip(repo, service_scaler_registry, sub_job), fields(sub_job_id = %sub_job.id))]

@@ -4,6 +4,7 @@ use rabbitmq::Publisher;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, Duration};
 use tracing::{debug, error, info};
+use uuid::Uuid;
 
 use crate::{
     background::{
@@ -17,6 +18,7 @@ use crate::{
 
 const LOOP_DELAY: Duration = Duration::from_secs(5);
 
+#[derive(Debug)]
 pub enum SubJobHandlerError {
     Skip(String),
     FailedJob(String),
@@ -223,18 +225,72 @@ pub async fn process_pending_sub_jobs(
                 sub_job.job_id, success_count, failure_count
             );
 
+            // Fail-fast: mark benchmark sub-jobs as Failed for locations where scaling failed
+            if failure_count > 0 {
+                if let Err(e) = fail_benchmarks_for_failed_scaling(repo, sub_job.job_id).await {
+                    error!("Failed to propagate scaling failures to benchmarks: {}", e);
+                }
+            }
+
             Ok(())
         }
         (_, SubJobType::Scaling) => {
-            match process_scaling(repo.clone(), service_scaler_registry.clone(), sub_job).await {
-                Ok(_) => Ok(()),
-                Err(e) => Err(SubJobHandlerError::FailedJob(format!(
-                    "Scaling failed: {}",
-                    e
-                ))),
-            }
+            process_scaling(repo.clone(), service_scaler_registry.clone(), sub_job).await
         }
     }
+}
+
+/// For each failed scaling sub-job, find the benchmark sub-job with the same topic
+/// and mark it as Failed immediately instead of waiting for it to timeout.
+async fn fail_benchmarks_for_failed_scaling(
+    repo: &Arc<Repositories>,
+    job_id: Uuid,
+) -> Result<(), String> {
+    let failed_scaling = repo
+        .sub_job
+        .get_failed_scaling_for_job(job_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    for scaling_sub_job in failed_scaling {
+        let topic = scaling_sub_job
+            .details
+            .get("topic")
+            .and_then(|v| v.as_str());
+
+        let Some(topic) = topic else {
+            error!(
+                "Failed scaling sub-job {} has no topic in details",
+                scaling_sub_job.id
+            );
+            continue;
+        };
+
+        match repo
+            .sub_job
+            .fail_benchmark_by_job_and_topic(
+                job_id,
+                topic,
+                format!("Scaling failed for location: {}", topic),
+            )
+            .await
+        {
+            Ok(true) => info!(
+                "Marked benchmark for location '{}' as Failed (scaling failed)",
+                topic
+            ),
+            Ok(false) => debug!(
+                "No pending benchmark found for location '{}' (may already be processed)",
+                topic
+            ),
+            Err(e) => error!(
+                "Failed to mark benchmark for location '{}' as Failed: {}",
+                topic, e
+            ),
+        }
+    }
+
+    Ok(())
 }
 
 /// Background loop that continuously processes sub-jobs

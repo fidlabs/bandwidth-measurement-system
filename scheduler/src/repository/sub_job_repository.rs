@@ -525,4 +525,61 @@ impl SubJobRepository {
         .fetch_all(&self.pool)
         .await
     }
+
+    pub async fn get_failed_scaling_for_job(
+        &self,
+        job_id: Uuid,
+    ) -> Result<Vec<SubJob>, sqlx::Error> {
+        sqlx::query_as!(
+            SubJob,
+            r#"
+            SELECT
+                id,
+                job_id,
+                status as "status: SubJobStatus",
+                type as "type: SubJobType",
+                details,
+                deadline_at
+            FROM sub_jobs
+            WHERE job_id = $1
+              AND type = $2
+              AND status = $3
+            "#,
+            job_id,
+            SubJobType::Scaling as SubJobType,
+            SubJobStatus::Failed as SubJobStatus
+        )
+        .fetch_all(&self.pool)
+        .await
+    }
+
+    pub async fn fail_benchmark_by_job_and_topic(
+        &self,
+        job_id: Uuid,
+        topic: &str,
+        error_message: String,
+    ) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE sub_jobs
+            SET
+                status = $1,
+                details = jsonb_set(details, '{error}', $5, true)
+            WHERE job_id = $2
+              AND type = $3
+              AND status = $4
+              AND details->>'topic' = $6
+            "#,
+            SubJobStatus::Failed as SubJobStatus,
+            job_id,
+            SubJobType::CombinedDHP as SubJobType,
+            SubJobStatus::Created as SubJobStatus,
+            serde_json::Value::String(error_message),
+            topic,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
 }
