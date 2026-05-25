@@ -1,4 +1,4 @@
-use std::net::{IpAddr, ToSocketAddrs};
+use std::net::IpAddr;
 
 use chrono::{Duration, Utc};
 use color_eyre::Result;
@@ -6,7 +6,6 @@ use rabbitmq::{JobMessage, PingError, PingResult};
 use rand::random;
 use surge_ping::{Client, Config, PingIdentifier, PingSequence, ICMP};
 use tracing::{debug, error, info};
-use url::Url;
 use uuid::Uuid;
 
 #[tracing::instrument(skip(payload))]
@@ -18,27 +17,12 @@ pub async fn process(job_id: Uuid, payload: JobMessage) -> Result<PingResult, Pi
 
     debug!("now: {} loop_deadline: {}", Utc::now(), loop_deadline);
 
-    // Parse the URL and extract the host
-    let url = Url::parse(&payload.url).map_err(|e| PingError {
-        error: format!("UrlParseError: {e}"),
-    })?;
-    let host = url.host_str().ok_or(PingError {
-        error: "Failed to extract host from URL".to_string(),
-    })?;
-
-    // Resolve the host to an IP address
-    let ip_address: IpAddr = (host, 0)
-        .to_socket_addrs()
-        .map_err(|_| PingError {
-            error: "Failed to extract IP address from socket addr".to_string(),
-        })?
-        .map(|socket_addr| socket_addr.ip())
-        .collect::<Vec<IpAddr>>()
-        .first()
-        .cloned() // Convert Option<&T> to Option<T>
-        .ok_or(PingError {
-            error: "Failed to extract IP address from socket addr".to_string(),
+    let resolved_url = crate::url_security::resolve_public_http_url(&payload.url)
+        .await
+        .map_err(|e| PingError {
+            error: format!("UrlSecurityError: {e}"),
         })?;
+    let ip_address = resolved_url.ip_address;
 
     let config = match ip_address {
         IpAddr::V4(_) => Config::default(),

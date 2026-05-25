@@ -114,24 +114,84 @@ impl ServiceRepository {
         Ok(services)
     }
 
+    pub async fn get_services_with_location_topic_mismatch(
+        &self,
+    ) -> Result<Vec<ServiceWithTopics>, sqlx::Error> {
+        let services = sqlx::query_as::<_, ServiceWithTopics>(
+            r#"
+            SELECT
+                s.id,
+                s.name,
+                s.provider_type,
+                s.details,
+                s.is_enabled,
+                s.location,
+                s.descale_at,
+                COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as topics
+            FROM services s
+            JOIN service_topics st ON s.id = st.service_id
+            JOIN topics t ON st.topic_id = t.id
+            JOIN (
+                SELECT DISTINCT location
+                FROM services
+                WHERE is_enabled = TRUE AND location IS NOT NULL
+            ) locations ON locations.location = t.name
+            WHERE s.is_enabled = TRUE
+              AND s.location IS DISTINCT FROM t.name
+            GROUP BY s.id
+            ORDER BY s.name
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(services)
+    }
+
     pub async fn create_service(
         &self,
         name: &str,
         provider_type: ProviderType,
         details: &serde_json::Value,
+        location: Option<&str>,
     ) -> Result<Service, sqlx::Error> {
-        let service = sqlx::query_as!(
-            Service,
+        let service = sqlx::query_as::<_, Service>(
             r#"
-            INSERT INTO services (name, provider_type, details, is_enabled)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, name, provider_type as "provider_type!: ProviderType", details, is_enabled, location, descale_at
+            INSERT INTO services (name, provider_type, details, is_enabled, location)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, name, provider_type, details, is_enabled, location, descale_at
             "#,
-            name,
-            provider_type as ProviderType,
-            details,
-            true
         )
+        .bind(name)
+        .bind(provider_type)
+        .bind(details)
+        .bind(true)
+        .bind(location)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(service)
+    }
+
+    pub async fn update_service(
+        &self,
+        service_id: &Uuid,
+        is_enabled: Option<bool>,
+        location: Option<&str>,
+    ) -> Result<Service, sqlx::Error> {
+        let service = sqlx::query_as::<_, Service>(
+            r#"
+            UPDATE services
+            SET
+                is_enabled = COALESCE($2, is_enabled),
+                location = COALESCE($3, location)
+            WHERE id = $1
+            RETURNING id, name, provider_type, details, is_enabled, location, descale_at
+            "#,
+        )
+        .bind(service_id)
+        .bind(is_enabled)
+        .bind(location)
         .fetch_one(&self.pool)
         .await?;
 

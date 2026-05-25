@@ -4,6 +4,7 @@ use color_eyre::{eyre::bail, Result};
 use rabbitmq::{AccumulatingBytes, DownloadError, DownloadResult, IntervalBytes, JobMessage};
 use reqwest::{
     header::{ACCEPT, RANGE, USER_AGENT},
+    redirect::Policy,
     Client, Response,
 };
 use tokio::time::{sleep, timeout};
@@ -14,15 +15,21 @@ use uuid::Uuid;
 const MAX_DOWNLOAD_DURATION: Duration = Duration::seconds(60);
 
 /// Prepare the HTTP request
-fn prepare_request(url: &str, range_start: i64, range_end: i64) -> reqwest::RequestBuilder {
+fn prepare_request(
+    url: &str,
+    range_start: i64,
+    range_end: i64,
+) -> Result<reqwest::RequestBuilder, reqwest::Error> {
     const USER_AGENT_STR: &str = "curl/7.68.0";
     const ACCEPT_TYPE: &str = "*/*";
 
-    Client::new()
+    let client = Client::builder().redirect(Policy::none()).build()?;
+
+    Ok(client
         .get(url)
         .header(RANGE, format!("bytes={range_start}-{range_end}"))
         .header(USER_AGENT, USER_AGENT_STR)
-        .header(ACCEPT, ACCEPT_TYPE)
+        .header(ACCEPT, ACCEPT_TYPE))
 }
 
 /// Calculates the next interval based on the current time and the specified interval in milliseconds.
@@ -74,7 +81,18 @@ async fn download_chunk(response: &mut Response) -> Result<Option<Bytes>, Downlo
 pub async fn process(job_id: Uuid, payload: JobMessage) -> Result<DownloadResult, DownloadError> {
     info!("Processing Download job");
 
-    let request = prepare_request(&payload.url, payload.start_range, payload.end_range);
+    crate::url_security::assert_public_http_url(&payload.url)
+        .await
+        .map_err(|e| DownloadError {
+            error: format!("UrlSecurityError: {e}"),
+        })?;
+
+    let request =
+        prepare_request(&payload.url, payload.start_range, payload.end_range).map_err(|e| {
+            DownloadError {
+                error: format!("ClientBuildError: {e}"),
+            }
+        })?;
 
     let job_start_time = Utc::now();
     let mut bytes: usize = 0;

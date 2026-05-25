@@ -20,7 +20,9 @@ pub struct UpdateServicePathInput {
 
 #[derive(Deserialize, ToSchema)]
 pub struct UpdateServiceInput {
-    pub is_enabled: bool,
+    pub is_enabled: Option<bool>,
+    pub location: Option<String>,
+    pub topics: Option<Vec<String>>,
 }
 
 // OpenAPI schema wrapper - handler returns Service directly
@@ -56,16 +58,49 @@ pub async fn handle_update_service(
         ApiResponse<ErrorResponse>,
     >,
 ) -> Result<ApiResponse<Service>, ApiResponse<()>> {
-    // Create the service
+    if payload.is_enabled.is_none() && payload.location.is_none() && payload.topics.is_none() {
+        return Err(bad_request(
+            "At least one of 'is_enabled', 'location', or 'topics' is required",
+        ))?;
+    }
+
+    if payload.location.as_deref() == Some("") {
+        return Err(bad_request("Field 'location' cannot be empty"))?;
+    }
+
+    if payload
+        .topics
+        .as_ref()
+        .is_some_and(|topics| topics.is_empty())
+    {
+        return Err(bad_request("Field 'topics' cannot be empty"))?;
+    }
+
     let service = state
         .repo
         .service
-        .update_service_set_enabled(&path.service_id, &payload.is_enabled)
+        .update_service(
+            &path.service_id,
+            payload.is_enabled,
+            payload.location.as_deref(),
+        )
         .await
         .inspect_err(|e| {
-            error!("ServiceRepository create service error: {:?}", e);
+            error!("ServiceRepository update service error: {:?}", e);
         })
-        .map_err(|_| internal_server_error("Failed to create service"))?;
+        .map_err(|_| internal_server_error("Failed to update service"))?;
+
+    if let Some(topics) = payload.topics {
+        state
+            .repo
+            .topic
+            .set_service_topics(&service.id, &topics)
+            .await
+            .inspect_err(|e| {
+                error!("TopicRepository set service topics error: {:?}", e);
+            })
+            .map_err(|_| internal_server_error("Failed to update service topics"))?;
+    }
 
     Ok(ok_response(service))
 }

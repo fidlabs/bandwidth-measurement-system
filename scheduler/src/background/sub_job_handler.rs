@@ -10,7 +10,7 @@ use crate::{
     background::{
         sub_job_combineddhp::process_combined_dhp_type, sub_job_scaling::process_scaling,
     },
-    job_repository::JobType,
+    job_repository::{JobStatus, JobType},
     service_scaler::ServiceScalerRegistry,
     sub_job_repository::SubJobType,
     Repositories,
@@ -151,18 +151,23 @@ pub async fn process_pending_sub_jobs(
                         }
                     }
 
+                    finalize_geolocation_parent_job(repo, sub_job.job_id).await?;
+
                     Ok(())
                 }
                 _ => {
                     // Pending/Processing - process individually for deadline and completion checks
-                    match process_combined_dhp_type(repo.clone(), job_queue.clone(), sub_job).await
-                    {
-                        Ok(_) => Ok(()),
-                        Err(e) => Err(SubJobHandlerError::FailedJob(format!(
-                            "CombinedDHP processing failed: {}",
-                            e
-                        ))),
-                    }
+                    let job_id = sub_job.job_id;
+                    process_combined_dhp_type(repo.clone(), job_queue.clone(), sub_job)
+                        .await
+                        .map_err(|e| {
+                            SubJobHandlerError::FailedJob(format!(
+                                "CombinedDHP processing failed: {}",
+                                e
+                            ))
+                        })?;
+
+                    finalize_geolocation_parent_job(repo, job_id).await
                 }
             }
         }
@@ -232,12 +237,52 @@ pub async fn process_pending_sub_jobs(
                 }
             }
 
+            finalize_geolocation_parent_job(repo, sub_job.job_id).await?;
+
             Ok(())
         }
         (_, SubJobType::Scaling) => {
             process_scaling(repo.clone(), service_scaler_registry.clone(), sub_job).await
         }
     }
+}
+
+async fn finalize_geolocation_parent_job(
+    repo: &Arc<Repositories>,
+    job_id: Uuid,
+) -> Result<(), SubJobHandlerError> {
+    let counts = repo
+        .sub_job
+        .count_combined_dhp_statuses_for_job(job_id)
+        .await
+        .map_err(|e| {
+            SubJobHandlerError::Skip(format!(
+                "Failed to count geolocation benchmark statuses: {e}"
+            ))
+        })?;
+
+    if counts.active > 0 {
+        return Ok(());
+    }
+
+    let status = if counts.completed > 0 {
+        Some(JobStatus::Completed)
+    } else if counts.failed > 0 {
+        Some(JobStatus::Failed)
+    } else {
+        None
+    };
+
+    if let Some(status) = status {
+        repo.job
+            .update_job_status(&job_id, status)
+            .await
+            .map_err(|e| {
+                SubJobHandlerError::Skip(format!("Failed to finalize geolocation job: {e}"))
+            })?;
+    }
+
+    Ok(())
 }
 
 /// For each failed scaling sub-job, find the benchmark sub-job with the same topic

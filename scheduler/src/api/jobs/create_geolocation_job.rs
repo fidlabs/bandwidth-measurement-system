@@ -6,7 +6,7 @@ use axum_extra::extract::WithRejection;
 use color_eyre::Result;
 use common::api_response::*;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use tracing::{debug, info};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -15,7 +15,9 @@ use crate::{
     job_repository::{JobDetails, JobStatus, JobType},
     state::AppState,
     sub_job_repository::{SubJobDetails, SubJobStatus, SubJobType},
-    url_validator::validate_and_get_file_range,
+    url_validator::{
+        validate_and_get_file_range, validate_and_get_file_range_allowing_private_addresses,
+    },
 };
 
 #[derive(Deserialize, ToSchema, Debug)]
@@ -74,8 +76,28 @@ pub async fn handle_create_geolocation_job(
         return Err(bad_request("No locations configured"));
     }
 
-    // Validate each location has services with matching topic
+    let topic_mismatches = state
+        .repo
+        .service
+        .get_services_with_location_topic_mismatch()
+        .await
+        .map_err(|_| internal_server_error("Failed to validate location topics"))?;
+
+    let mut location_errors = HashMap::new();
     for location in &locations {
+        for service in &topic_mismatches {
+            if service.topics.iter().any(|topic| topic == location) {
+                location_errors.entry(location.clone()).or_insert_with(|| {
+                    format!(
+                        "Location '{}' topic is also attached to service '{}' with location '{}'",
+                        location,
+                        service.name,
+                        service.location.as_deref().unwrap_or("NULL")
+                    )
+                });
+            }
+        }
+
         let services = state
             .repo
             .service
@@ -84,22 +106,44 @@ pub async fn handle_create_geolocation_job(
             .map_err(|_| internal_server_error("Failed to validate location"))?;
 
         if services.is_empty() {
-            return Err(bad_request(format!(
-                "Location '{}' has no services with matching topic",
-                location
-            )));
+            location_errors.entry(location.clone()).or_insert_with(|| {
+                format!(
+                    "Location '{}' has no services with matching topic",
+                    location
+                )
+            });
         }
     }
 
     debug!("Found {} locations: {:?}", locations.len(), locations);
 
     // Validate URL and get file range (with SSRF protection)
-    let (validated_url, start_range, end_range) =
-        validate_and_get_file_range(&state.acl_client, &payload.url, size_mb)
-            .await
-            .map_err(|e| bad_request(e.to_string()))?;
+    let (validated_url, start_range, end_range) = if state.allow_private_url_validation {
+        validate_and_get_file_range_allowing_private_addresses(
+            &state.acl_client,
+            &payload.url,
+            size_mb,
+        )
+        .await
+    } else {
+        validate_and_get_file_range(&state.acl_client, &payload.url, size_mb).await
+    }
+    .map_err(|e| bad_request(e.to_string()))?;
 
-    // Create job
+    let has_invalid_service_config = !location_errors.is_empty();
+    let invalid_config_error = if has_invalid_service_config {
+        Some(format!(
+            "Invalid geolocation service configuration: {}",
+            location_errors
+                .values()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join("; ")
+        ))
+    } else {
+        None
+    };
+
     let job_id = Uuid::new_v4();
     let job = state
         .repo
@@ -108,7 +152,11 @@ pub async fn handle_create_geolocation_job(
             job_id,
             validated_url.as_str().to_string(),
             &"all".to_string(), // Routing key for reference
-            JobStatus::Pending,
+            if has_invalid_service_config {
+                JobStatus::Failed
+            } else {
+                JobStatus::Pending
+            },
             JobType::Geolocation,
             JobDetails::new(
                 start_range,
@@ -129,22 +177,40 @@ pub async fn handle_create_geolocation_job(
     let mut sub_jobs_to_create = Vec::with_capacity(locations.len() * 2);
 
     for location in &locations {
+        let sub_job_status = if has_invalid_service_config {
+            SubJobStatus::Failed
+        } else {
+            SubJobStatus::Created
+        };
+        let sub_job_error = location_errors
+            .get(location)
+            .cloned()
+            .or_else(|| invalid_config_error.clone());
+
+        let mut scaling_details = SubJobDetails::topic(location.clone());
+        let mut benchmark_details = SubJobDetails::topic(location.clone()).with_partial(100);
+
+        if let Some(error) = sub_job_error {
+            scaling_details = scaling_details.with_error(error.clone());
+            benchmark_details = benchmark_details.with_error(error);
+        }
+
         // Scaling sub-job
         sub_jobs_to_create.push((
             Uuid::new_v4(),
             job.id,
-            SubJobStatus::Created,
+            sub_job_status.clone(),
             SubJobType::Scaling,
-            SubJobDetails::topic(location.clone()),
+            scaling_details,
         ));
 
         // Benchmark sub-job with explicit partial: 100
         sub_jobs_to_create.push((
             Uuid::new_v4(),
             job.id,
-            SubJobStatus::Created,
+            sub_job_status,
             SubJobType::CombinedDHP,
-            SubJobDetails::topic(location.clone()).with_partial(100),
+            benchmark_details,
         ));
     }
 
@@ -163,6 +229,10 @@ pub async fn handle_create_geolocation_job(
 
     Ok(ok_response(CreateGeolocationJobResponse {
         job_id: job.id,
-        status: "pending".to_string(),
+        status: if has_invalid_service_config {
+            "failed".to_string()
+        } else {
+            "pending".to_string()
+        },
     }))
 }

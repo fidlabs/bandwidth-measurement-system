@@ -100,4 +100,53 @@ impl TopicRepository {
 
         Ok(())
     }
+
+    pub async fn set_service_topics(
+        &self,
+        service_id: &Uuid,
+        topics: &[String],
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            INSERT INTO topics (name)
+            SELECT * FROM unnest($1::text[])
+            ON CONFLICT (name)
+            DO NOTHING
+            "#,
+        )
+        .bind(topics)
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            DELETE FROM service_topics
+            WHERE service_id = $1
+              AND topic_id NOT IN (
+                  SELECT id FROM topics WHERE name = ANY($2::text[])
+              )
+            "#,
+        )
+        .bind(service_id)
+        .bind(topics)
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO service_topics (service_id, topic_id)
+            SELECT $1, id FROM (
+                SELECT id FROM topics WHERE name = ANY($2::text[])
+            ) AS topic_ids
+            ON CONFLICT (service_id, topic_id)
+            DO NOTHING
+            "#,
+        )
+        .bind(service_id)
+        .bind(topics)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
 }

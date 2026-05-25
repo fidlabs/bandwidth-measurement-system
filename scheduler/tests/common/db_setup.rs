@@ -1,6 +1,6 @@
 // scheduler/tests/common/db_setup.rs
 
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use tracing::info;
 
 pub struct TestDatabase {
@@ -109,32 +109,32 @@ pub async fn seed_service(
 }
 
 pub async fn seed_topic(pool: &PgPool, name: &str) -> i32 {
-    let record = sqlx::query!(
+    let record = sqlx::query(
         r#"
         INSERT INTO topics (name)
         VALUES ($1)
         ON CONFLICT (name) DO UPDATE SET name = $1
         RETURNING id
         "#,
-        name
     )
+    .bind(name)
     .fetch_one(pool)
     .await
     .expect("Failed to seed topic");
 
-    record.id
+    record.get("id")
 }
 
 pub async fn seed_service_topic(pool: &PgPool, service_id: uuid::Uuid, topic_id: i32) {
-    sqlx::query!(
+    sqlx::query(
         r#"
         INSERT INTO service_topics (service_id, topic_id)
         VALUES ($1, $2)
         ON CONFLICT DO NOTHING
         "#,
-        service_id,
-        topic_id
     )
+    .bind(service_id)
+    .bind(topic_id)
     .execute(pool)
     .await
     .expect("Failed to seed service_topic");

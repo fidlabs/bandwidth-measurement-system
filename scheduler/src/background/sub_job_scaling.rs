@@ -5,6 +5,7 @@ use tokio::time::Duration;
 use tracing::{debug, error, info};
 
 use crate::{
+    job_repository::JobType,
     service_repository::Service,
     service_scaler::ServiceScalerRegistry,
     sub_job_repository::{SubJobStatus, SubJobWithJob},
@@ -42,11 +43,7 @@ pub(super) async fn process_scaling(
 
             let _ = repo
                 .sub_job
-                .update_sub_job_status_with_error(
-                    &sub_job.id,
-                    SubJobStatus::Failed,
-                    e.clone(),
-                )
+                .update_sub_job_status_with_error(&sub_job.id, SubJobStatus::Failed, e.clone())
                 .await;
         }
     }
@@ -106,7 +103,10 @@ async fn process_scaling_created(
         scaler
             .scale_up(&service, scale_each_by.try_into().unwrap_or(0))
             .await
-            .map_err(|e| SubJobHandlerError::Skip(e.to_str()))?;
+            .map_err(|e| match sub_job.job.job_type {
+                JobType::Geolocation => SubJobHandlerError::FailedJob(e.to_str()),
+                _ => SubJobHandlerError::Skip(e.to_str()),
+            })?;
 
         info!(
             "Scaled up service: {} id: {} by {}",

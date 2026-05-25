@@ -15,6 +15,7 @@ pub struct ScaleCall {
 pub struct MockServiceScaler {
     pub scale_up_calls: Arc<Mutex<Vec<ScaleCall>>>,
     pub scale_down_calls: Arc<Mutex<Vec<ScaleCall>>>,
+    fail_next_scale_up: Arc<Mutex<bool>>,
 }
 
 impl MockServiceScaler {
@@ -22,6 +23,7 @@ impl MockServiceScaler {
         Self {
             scale_up_calls: Arc::new(Mutex::new(Vec::new())),
             scale_down_calls: Arc::new(Mutex::new(Vec::new())),
+            fail_next_scale_up: Arc::new(Mutex::new(false)),
         }
     }
 
@@ -36,6 +38,10 @@ impl MockServiceScaler {
     pub async fn clear_calls(&self) {
         self.scale_up_calls.lock().await.clear();
         self.scale_down_calls.lock().await.clear();
+    }
+
+    pub async fn fail_next_scale_up(&self) {
+        *self.fail_next_scale_up.lock().await = true;
     }
 }
 
@@ -52,6 +58,15 @@ impl ServiceScaler for MockServiceScaler {
             service_name: service.name.clone(),
             amount,
         });
+
+        let mut fail_next_scale_up = self.fail_next_scale_up.lock().await;
+        if *fail_next_scale_up {
+            *fail_next_scale_up = false;
+            return Err(ServiceScalerError::GenericError(
+                "mock scale up failed".to_string(),
+            ));
+        }
+
         Ok(())
     }
 

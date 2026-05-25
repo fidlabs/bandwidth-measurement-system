@@ -1,6 +1,7 @@
 // scheduler/tests/integration/bandwidth_saturation.rs
 
 use crate::common::*;
+use sqlx::Row;
 use uuid::Uuid;
 
 #[tokio::test]
@@ -80,22 +81,23 @@ async fn test_bandwidth_job_creates_three_sub_jobs() {
     let job_id: Uuid = body["id"].as_str().unwrap().parse().unwrap();
 
     // Verify job type
-    let job = sqlx::query!(
-        r#"SELECT job_type::text as job_type FROM jobs WHERE id = $1"#,
-        job_id
-    )
-    .fetch_one(ctx.pool())
-    .await
-    .unwrap();
+    let job = sqlx::query(r#"SELECT job_type::text as job_type FROM jobs WHERE id = $1"#)
+        .bind(job_id)
+        .fetch_one(ctx.pool())
+        .await
+        .unwrap();
 
-    assert_eq!(job.job_type, Some("bandwidth_saturation".to_string()));
+    assert_eq!(
+        job.get::<Option<String>, _>("job_type"),
+        Some("bandwidth_saturation".to_string())
+    );
 
     // Verify sub-jobs: 1 Scaling + 3 CombinedDHP (1%, 80%, 100%) = 4 total
-    let sub_jobs = sqlx::query!(
+    let sub_jobs = sqlx::query(
         r#"SELECT type::text as sub_type, details->>'worker_percent' as worker_percent
            FROM sub_jobs WHERE job_id = $1 ORDER BY created_at"#,
-        job_id
     )
+    .bind(job_id)
     .fetch_all(ctx.pool())
     .await
     .unwrap();
@@ -109,11 +111,11 @@ async fn test_bandwidth_job_creates_three_sub_jobs() {
     // Count by type
     let scaling_count = sub_jobs
         .iter()
-        .filter(|s| s.sub_type == Some("Scaling".to_string()))
+        .filter(|s| s.get::<Option<String>, _>("sub_type") == Some("Scaling".to_string()))
         .count();
     let benchmark_count = sub_jobs
         .iter()
-        .filter(|s| s.sub_type == Some("CombinedDHP".to_string()))
+        .filter(|s| s.get::<Option<String>, _>("sub_type") == Some("CombinedDHP".to_string()))
         .count();
 
     assert_eq!(scaling_count, 1, "Should have 1 Scaling sub-job");

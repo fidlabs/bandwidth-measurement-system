@@ -1,7 +1,7 @@
 use chrono::{Duration, Utc};
 use color_eyre::Result;
 use rabbitmq::{HeadError, HeadResult, JobMessage};
-use reqwest::Client;
+use reqwest::{redirect::Policy, Client};
 use tokio::time::Instant;
 use tracing::{debug, info};
 use uuid::Uuid;
@@ -10,7 +10,18 @@ use uuid::Uuid;
 pub async fn process(job_id: Uuid, payload: JobMessage) -> Result<HeadResult, HeadError> {
     info!("Processing HEAD job");
 
-    let client = Client::new();
+    crate::url_security::assert_public_http_url(&payload.url)
+        .await
+        .map_err(|e| HeadError {
+            error: format!("UrlSecurityError: {e}"),
+        })?;
+
+    let client = Client::builder()
+        .redirect(Policy::none())
+        .build()
+        .map_err(|e| HeadError {
+            error: format!("ClientBuildError: {e}"),
+        })?;
     let num_requests = 10; // Number of times to send the HEAD request
     let mut latencies: Vec<f64> = Vec::with_capacity(num_requests);
 

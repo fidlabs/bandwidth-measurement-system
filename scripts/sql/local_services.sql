@@ -5,7 +5,7 @@
 -- docker-compose.yml worker services structure.
 --
 -- Services configured:
---   - worker_eu_pl  (Europe/Poland/Rzeszow)  location: europe
+--   - worker_eu_pl  (Europe/Poland/Rzeszow)  location: poland
 --   - worker_usa_la (USA/California/Los Angeles)  location: usa
 --   - worker_eu_es  (Europe/Spain/Alicante)  location: spain
 --
@@ -50,7 +50,7 @@ INSERT INTO services (
         'docker_local'::provider_type,
         true,
         '{}'::jsonb,
-        'europe'
+        'poland'
     ),
     (
         'a2222222-2222-2222-2222-222222222222'::uuid,

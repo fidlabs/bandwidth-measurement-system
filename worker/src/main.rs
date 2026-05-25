@@ -14,6 +14,7 @@ use tracing_subscriber::EnvFilter;
 mod config;
 mod handlers;
 mod queue;
+mod url_security;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {

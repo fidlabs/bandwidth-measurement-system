@@ -9,7 +9,7 @@ use rabbitmq::{JobMessage, Message, Publisher};
 use tracing::{debug, error};
 
 use crate::{
-    job_repository::JobStatus,
+    job_repository::{JobStatus, JobType},
     sub_job_repository::{SubJobStatus, SubJobType, SubJobWithJob},
     Repositories,
 };
@@ -155,6 +155,19 @@ async fn process_status_processing(
         .map_err(|e| SubJobHandlerError::Skip(format!("Failed to get data: {e}")))?;
 
     if data.len() >= workers_count as usize {
+        if sub_job.job.job_type == JobType::Geolocation {
+            let successful_downloads = data
+                .iter()
+                .filter(|worker_data| worker_data.is_success == Some(true))
+                .count();
+
+            if successful_downloads == 0 {
+                return Err(SubJobHandlerError::FailedJob(
+                    "All geolocation worker downloads failed".to_string(),
+                ));
+            }
+        }
+
         repo.sub_job
             .update_sub_job_status(&sub_job.id, SubJobStatus::Completed)
             .await

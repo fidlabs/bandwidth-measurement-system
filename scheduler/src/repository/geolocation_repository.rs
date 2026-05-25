@@ -1,6 +1,6 @@
 use color_eyre::Result;
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -83,23 +83,28 @@ impl GeolocationRepository {
             // If completed, get aggregated metrics
             let (ttfb_ms, bandwidth_mbps, worker_count) =
                 if location_status == LocationStatus::Completed {
-                    let metrics = sqlx::query!(
+                    let metrics = sqlx::query(
                         r#"
                     SELECT
-                        AVG((d.download->>'time_to_first_byte_ms')::float) as "avg_ttfb",
-                        AVG((d.download->>'download_speed')::float) as "avg_bandwidth",
-                        COUNT(DISTINCT d.worker_name) as "worker_count"
+                        AVG((d.download->>'time_to_first_byte_ms')::float) as avg_ttfb,
+                        AVG((d.download->>'download_speed')::float) as avg_bandwidth,
+                        COUNT(DISTINCT d.worker_name) as worker_count
                     FROM worker_data d
                     WHERE d.sub_job_id = $1
+                      AND d.is_success = TRUE
                     "#,
-                        sub_job_id
                     )
+                    .bind(sub_job_id)
                     .fetch_one(&self.pool)
                     .await
                     .ok();
 
                     if let Some(m) = metrics {
-                        (m.avg_ttfb, m.avg_bandwidth, m.worker_count)
+                        (
+                            m.try_get("avg_ttfb").ok(),
+                            m.try_get("avg_bandwidth").ok(),
+                            m.try_get("worker_count").ok(),
+                        )
                     } else {
                         (None, None, None)
                     }

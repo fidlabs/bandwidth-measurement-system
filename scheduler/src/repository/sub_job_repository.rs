@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{
     prelude::{FromRow, Type},
     types::Json,
-    PgPool,
+    PgPool, Row,
 };
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -44,6 +44,13 @@ pub struct SubJob {
     pub r#type: SubJobType,
     pub details: serde_json::Value,
     pub deadline_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug)]
+pub struct CombinedDhpStatusCounts {
+    pub active: i64,
+    pub completed: i64,
+    pub failed: i64,
 }
 
 #[derive(Serialize, Deserialize, FromRow, Debug, Type, ToSchema)]
@@ -107,6 +114,8 @@ pub struct SubJobDetails {
     pub workers_count: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub topic: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 impl SubJobDetails {
     pub fn partial(partial: i64) -> Self {
@@ -134,6 +143,11 @@ impl SubJobDetails {
     /// Enables chaining: `SubJobDetails::topic(location).with_partial(100)`
     pub fn with_partial(mut self, partial: i64) -> Self {
         self.partial = Some(partial);
+        self
+    }
+
+    pub fn with_error(mut self, error: String) -> Self {
+        self.error = Some(error);
         self
     }
 }
@@ -581,5 +595,33 @@ impl SubJobRepository {
         .await?;
 
         Ok(result.rows_affected() > 0)
+    }
+
+    pub async fn count_combined_dhp_statuses_for_job(
+        &self,
+        job_id: Uuid,
+    ) -> Result<CombinedDhpStatusCounts, sqlx::Error> {
+        let row = sqlx::query(
+            r#"
+            SELECT
+                COUNT(*) FILTER (
+                    WHERE status::text IN ('Created', 'Pending', 'Processing')
+                ) AS active_count,
+                COUNT(*) FILTER (WHERE status::text = 'Completed') AS completed_count,
+                COUNT(*) FILTER (WHERE status::text = 'Failed') AS failed_count
+            FROM sub_jobs
+            WHERE job_id = $1
+              AND type::text = 'CombinedDHP'
+            "#,
+        )
+        .bind(job_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(CombinedDhpStatusCounts {
+            active: row.try_get("active_count")?,
+            completed: row.try_get("completed_count")?,
+            failed: row.try_get("failed_count")?,
+        })
     }
 }

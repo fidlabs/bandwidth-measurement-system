@@ -4,7 +4,9 @@ use http_acl_reqwest::HttpAclMiddleware;
 use rand::Rng;
 use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
+use tokio::net::lookup_host;
 use tracing::debug;
 use url::Url;
 
@@ -96,12 +98,35 @@ pub async fn validate_and_get_file_range(
     url_str: &str,
     size_mb: i64,
 ) -> Result<(ValidatedUrl, i64, i64)> {
+    validate_and_get_file_range_inner(client, url_str, size_mb, true).await
+}
+
+/// Test-only variant for integration tests that use a localhost mock file server.
+/// Production callers must use `validate_and_get_file_range`.
+pub async fn validate_and_get_file_range_allowing_private_addresses(
+    client: &ClientWithMiddleware,
+    url_str: &str,
+    size_mb: i64,
+) -> Result<(ValidatedUrl, i64, i64)> {
+    validate_and_get_file_range_inner(client, url_str, size_mb, false).await
+}
+
+async fn validate_and_get_file_range_inner(
+    client: &ClientWithMiddleware,
+    url_str: &str,
+    size_mb: i64,
+    validate_resolved_addresses: bool,
+) -> Result<(ValidatedUrl, i64, i64)> {
     // Parse URL
     let url = Url::parse(url_str).context("Invalid URL format")?;
 
     // Validate scheme
     if url.scheme() != "http" && url.scheme() != "https" {
         bail!("URL scheme must be http or https");
+    }
+
+    if validate_resolved_addresses {
+        validate_resolved_addresses_are_public(&url).await?;
     }
 
     // Make HEAD request (ACL middleware validates host/IP automatically)
@@ -157,6 +182,61 @@ pub async fn validate_and_get_file_range(
     debug!("Selected range: {} - {}", start_range, end_range);
 
     Ok((ValidatedUrl(url), start_range, end_range))
+}
+
+fn is_disallowed_ipv4(ip: Ipv4Addr) -> bool {
+    ip.is_private()
+        || ip.is_loopback()
+        || ip.is_link_local()
+        || ip.is_broadcast()
+        || ip.is_documentation()
+        || ip.is_unspecified()
+        || ip.is_multicast()
+        || ip.octets()[0] == 0
+        || (ip.octets()[0] == 100 && (ip.octets()[1] & 0b1100_0000) == 0b0100_0000)
+}
+
+fn is_disallowed_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => is_disallowed_ipv4(v4),
+        IpAddr::V6(v6) => {
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_unique_local()
+                || v6.is_unicast_link_local()
+                || v6.is_multicast()
+        }
+    }
+}
+
+async fn validate_resolved_addresses_are_public(url: &Url) -> Result<()> {
+    let host = url.host_str().context("URL host is missing")?;
+    let port = url.port_or_known_default().context("URL port is missing")?;
+
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        if is_disallowed_ip(ip) {
+            bail!("URL resolves to a blocked IP address");
+        }
+        return Ok(());
+    }
+
+    let resolved = lookup_host((host, port))
+        .await
+        .context("Failed to resolve URL host")?;
+
+    let mut saw_address = false;
+    for socket_addr in resolved {
+        saw_address = true;
+        if is_disallowed_ip(socket_addr.ip()) {
+            bail!("URL resolves to a blocked IP address");
+        }
+    }
+
+    if !saw_address {
+        bail!("URL host resolved to no addresses");
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -239,6 +319,45 @@ mod tests {
 
         assert!(acl.is_host_allowed("example.com").is_allowed());
         assert!(acl.is_host_allowed("cdn.provider.com").is_allowed());
+    }
+
+    #[test]
+    fn test_rejects_private_resolved_ips() {
+        assert!(is_disallowed_ip("127.0.0.1".parse().unwrap()));
+        assert!(is_disallowed_ip("10.0.0.1".parse().unwrap()));
+        assert!(is_disallowed_ip("172.16.0.1".parse().unwrap()));
+        assert!(is_disallowed_ip("192.168.1.1".parse().unwrap()));
+        assert!(is_disallowed_ip("169.254.169.254".parse().unwrap()));
+        assert!(is_disallowed_ip("100.64.0.1".parse().unwrap()));
+        assert!(is_disallowed_ip("::1".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_allows_public_resolved_ips() {
+        assert!(!is_disallowed_ip("8.8.8.8".parse().unwrap()));
+        assert!(!is_disallowed_ip("1.1.1.1".parse().unwrap()));
+        assert!(!is_disallowed_ip("2606:4700:4700::1111".parse().unwrap()));
+    }
+
+    #[tokio::test]
+    async fn test_resolved_address_guard_rejects_literal_private_ip() {
+        let url = Url::parse("http://127.0.0.1/test").unwrap();
+        let result = validate_resolved_addresses_are_public(&url).await;
+
+        assert!(result.is_err(), "loopback URL should be rejected");
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("blocked IP address"));
+    }
+
+    #[tokio::test]
+    async fn test_resolved_address_guard_allows_literal_public_ip() {
+        let url = Url::parse("http://1.1.1.1/test").unwrap();
+
+        validate_resolved_addresses_are_public(&url)
+            .await
+            .expect("public literal IP should be allowed");
     }
 
     #[tokio::test]

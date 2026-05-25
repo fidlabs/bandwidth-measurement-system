@@ -23,6 +23,8 @@ pub struct CreateServiceInput {
     pub provider_type: ProviderType,
     #[schema(example = r#"["topic1", "topic2"]"#)]
     pub topics: Vec<String>,
+    #[schema(example = "poland", required = false)]
+    pub location: Option<String>,
     #[schema(example = "a-cluster", required = false)]
     pub cluster: Option<String>,
     #[schema(example = "us-east-1", required = false)]
@@ -65,6 +67,10 @@ pub async fn handle_create_service(
         return Err(bad_request("Field 'topics' cannot be empty"))?;
     }
 
+    if payload.location.as_deref() == Some("") {
+        return Err(bad_request("Field 'location' cannot be empty"))?;
+    }
+
     // Validate and construct the details field based on the provider type
     let details = match payload.provider_type {
         ProviderType::DockerLocal => serde_json::json!({}),
@@ -86,7 +92,12 @@ pub async fn handle_create_service(
     let service = state
         .repo
         .service
-        .create_service(&payload.service_name, payload.provider_type, &details)
+        .create_service(
+            &payload.service_name,
+            payload.provider_type,
+            &details,
+            payload.location.as_deref(),
+        )
         .await
         .inspect_err(|e| {
             error!("ServiceRepository create service error: {:?}", e);

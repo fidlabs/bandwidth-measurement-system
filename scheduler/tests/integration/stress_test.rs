@@ -1,6 +1,7 @@
 // scheduler/tests/integration/stress_test.rs
 
 use crate::common::*;
+use sqlx::Row;
 use std::time::Instant;
 use tracing::info;
 use uuid::Uuid;
@@ -71,12 +72,14 @@ async fn test_concurrent_geolocation_job_creation() {
 
     // Verify each job has correct sub-jobs (3 scaling + 3 benchmarks = 6 total)
     for job_id in &job_ids {
-        let sub_job_count =
-            sqlx::query_scalar!(r#"SELECT COUNT(*) FROM sub_jobs WHERE job_id = $1"#, job_id)
-                .fetch_one(ctx.pool())
-                .await
-                .unwrap()
-                .unwrap_or(0);
+        let sub_job_count = sqlx::query_scalar::<_, Option<i64>>(
+            r#"SELECT COUNT(*) FROM sub_jobs WHERE job_id = $1"#,
+        )
+        .bind(job_id)
+        .fetch_one(ctx.pool())
+        .await
+        .unwrap()
+        .unwrap_or(0);
 
         assert_eq!(
             sub_job_count, 6,
@@ -86,7 +89,7 @@ async fn test_concurrent_geolocation_job_creation() {
     }
 
     // Verify total jobs in database
-    let total_jobs = sqlx::query_scalar!(r#"SELECT COUNT(*) FROM jobs"#)
+    let total_jobs = sqlx::query_scalar::<_, Option<i64>>(r#"SELECT COUNT(*) FROM jobs"#)
         .fetch_one(ctx.pool())
         .await
         .unwrap()
@@ -99,7 +102,7 @@ async fn test_concurrent_geolocation_job_creation() {
     );
 
     // Verify total sub-jobs in database (10 jobs * 6 sub-jobs each = 60)
-    let total_sub_jobs = sqlx::query_scalar!(r#"SELECT COUNT(*) FROM sub_jobs"#)
+    let total_sub_jobs = sqlx::query_scalar::<_, Option<i64>>(r#"SELECT COUNT(*) FROM sub_jobs"#)
         .fetch_one(ctx.pool())
         .await
         .unwrap()
@@ -185,12 +188,14 @@ async fn test_concurrent_bandwidth_job_creation() {
 
     // Verify each job has correct sub-jobs (1 scaling + 3 CombinedDHP = 4 total)
     for job_id in &job_ids {
-        let sub_job_count =
-            sqlx::query_scalar!(r#"SELECT COUNT(*) FROM sub_jobs WHERE job_id = $1"#, job_id)
-                .fetch_one(ctx.pool())
-                .await
-                .unwrap()
-                .unwrap_or(0);
+        let sub_job_count = sqlx::query_scalar::<_, Option<i64>>(
+            r#"SELECT COUNT(*) FROM sub_jobs WHERE job_id = $1"#,
+        )
+        .bind(job_id)
+        .fetch_one(ctx.pool())
+        .await
+        .unwrap()
+        .unwrap_or(0);
 
         assert_eq!(
             sub_job_count, 4,
@@ -200,7 +205,7 @@ async fn test_concurrent_bandwidth_job_creation() {
     }
 
     // Verify total jobs in database
-    let total_jobs = sqlx::query_scalar!(r#"SELECT COUNT(*) FROM jobs"#)
+    let total_jobs = sqlx::query_scalar::<_, Option<i64>>(r#"SELECT COUNT(*) FROM jobs"#)
         .fetch_one(ctx.pool())
         .await
         .unwrap()
@@ -213,7 +218,7 @@ async fn test_concurrent_bandwidth_job_creation() {
     );
 
     // Verify total sub-jobs in database (10 jobs * 4 sub-jobs each = 40)
-    let total_sub_jobs = sqlx::query_scalar!(r#"SELECT COUNT(*) FROM sub_jobs"#)
+    let total_sub_jobs = sqlx::query_scalar::<_, Option<i64>>(r#"SELECT COUNT(*) FROM sub_jobs"#)
         .fetch_one(ctx.pool())
         .await
         .unwrap()
@@ -326,19 +331,21 @@ async fn test_mixed_concurrent_job_creation() {
     );
 
     // Verify job types in database
-    let geo_count =
-        sqlx::query_scalar!(r#"SELECT COUNT(*) FROM jobs WHERE job_type = 'geolocation'"#)
-            .fetch_one(ctx.pool())
-            .await
-            .unwrap()
-            .unwrap_or(0);
+    let geo_count = sqlx::query_scalar::<_, Option<i64>>(
+        r#"SELECT COUNT(*) FROM jobs WHERE job_type = 'geolocation'"#,
+    )
+    .fetch_one(ctx.pool())
+    .await
+    .unwrap()
+    .unwrap_or(0);
 
-    let bw_count =
-        sqlx::query_scalar!(r#"SELECT COUNT(*) FROM jobs WHERE job_type = 'bandwidth_saturation'"#)
-            .fetch_one(ctx.pool())
-            .await
-            .unwrap()
-            .unwrap_or(0);
+    let bw_count = sqlx::query_scalar::<_, Option<i64>>(
+        r#"SELECT COUNT(*) FROM jobs WHERE job_type = 'bandwidth_saturation'"#,
+    )
+    .fetch_one(ctx.pool())
+    .await
+    .unwrap()
+    .unwrap_or(0);
 
     assert_eq!(geo_count, num_geo_jobs as i64);
     assert_eq!(bw_count, num_bw_jobs as i64);
@@ -347,7 +354,7 @@ async fn test_mixed_concurrent_job_creation() {
     // Geolocation: 5 jobs * 6 sub-jobs = 30
     // Bandwidth: 5 jobs * 4 sub-jobs = 20
     // Total: 50
-    let total_sub_jobs = sqlx::query_scalar!(r#"SELECT COUNT(*) FROM sub_jobs"#)
+    let total_sub_jobs = sqlx::query_scalar::<_, Option<i64>>(r#"SELECT COUNT(*) FROM sub_jobs"#)
         .fetch_one(ctx.pool())
         .await
         .unwrap()
@@ -421,10 +428,10 @@ async fn test_database_integrity_under_concurrent_load() {
     );
 
     // Verify foreign key relationships are intact
-    let orphan_sub_jobs = sqlx::query_scalar!(
+    let orphan_sub_jobs = sqlx::query_scalar::<_, Option<i64>>(
         r#"SELECT COUNT(*)
            FROM sub_jobs sj
-           WHERE NOT EXISTS (SELECT 1 FROM jobs j WHERE j.id = sj.job_id)"#
+           WHERE NOT EXISTS (SELECT 1 FROM jobs j WHERE j.id = sj.job_id)"#,
     )
     .fetch_one(ctx.pool())
     .await
@@ -438,15 +445,15 @@ async fn test_database_integrity_under_concurrent_load() {
 
     // Verify each job has exactly the expected number of sub-jobs
     for job_id in &job_ids {
-        let sub_jobs = sqlx::query!(
+        let sub_jobs = sqlx::query(
             r#"SELECT
                     id,
                     job_id,
                     type::text as sub_type
                FROM sub_jobs
                WHERE job_id = $1"#,
-            job_id
         )
+        .bind(job_id)
         .fetch_all(ctx.pool())
         .await
         .unwrap();
@@ -461,19 +468,23 @@ async fn test_database_integrity_under_concurrent_load() {
         // Verify all sub-jobs reference the correct parent
         for sj in &sub_jobs {
             assert_eq!(
-                sj.job_id, *job_id,
+                sj.get::<Uuid, _>("job_id"),
+                *job_id,
                 "Sub-job {} should reference job {}",
-                sj.id, job_id
+                sj.get::<Uuid, _>("id"),
+                job_id
             );
         }
     }
 
     // Verify job statuses are consistent (using PascalCase enum value)
-    let pending_jobs = sqlx::query_scalar!(r#"SELECT COUNT(*) FROM jobs WHERE status = 'Pending'"#)
-        .fetch_one(ctx.pool())
-        .await
-        .unwrap()
-        .unwrap_or(0);
+    let pending_jobs = sqlx::query_scalar::<_, Option<i64>>(
+        r#"SELECT COUNT(*) FROM jobs WHERE status = 'Pending'"#,
+    )
+    .fetch_one(ctx.pool())
+    .await
+    .unwrap()
+    .unwrap_or(0);
 
     assert_eq!(
         pending_jobs, num_jobs as i64,

@@ -15,7 +15,9 @@ use crate::{
     job_repository::{Job, JobDetails, JobStatus, JobType},
     state::AppState,
     sub_job_repository::{SubJob, SubJobDetails, SubJobStatus, SubJobType},
-    url_validator::validate_and_get_file_range,
+    url_validator::{
+        validate_and_get_file_range, validate_and_get_file_range_allowing_private_addresses,
+    },
 };
 
 #[derive(Deserialize, ToSchema, Debug)]
@@ -111,10 +113,17 @@ pub async fn handle_create_job(
     let target_worker_count = params.worker_count;
 
     // Validate URL and get file range (with SSRF protection)
-    let (validated_url, start_range, end_range) =
-        validate_and_get_file_range(&state.acl_client, &params.url, params.size_mb)
-            .await
-            .map_err(|e| bad_request(e.to_string()))?;
+    let (validated_url, start_range, end_range) = if state.allow_private_url_validation {
+        validate_and_get_file_range_allowing_private_addresses(
+            &state.acl_client,
+            &params.url,
+            params.size_mb,
+        )
+        .await
+    } else {
+        validate_and_get_file_range(&state.acl_client, &params.url, params.size_mb).await
+    }
+    .map_err(|e| bad_request(e.to_string()))?;
 
     let job_id = Uuid::new_v4();
 

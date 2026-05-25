@@ -64,7 +64,11 @@ impl TestContext {
         let acl_client = create_test_acl_client();
 
         // Create app state
-        let app_state = Arc::new(AppState::new(repo, service_scaler_registry, acl_client));
+        let app_state = Arc::new(AppState::new_allowing_private_url_validation(
+            repo,
+            service_scaler_registry,
+            acl_client,
+        ));
 
         // Create router (without swagger UI for tests)
         let app = scheduler::routes::create_routes().with_state(app_state);
